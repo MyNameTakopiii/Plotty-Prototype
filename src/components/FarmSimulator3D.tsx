@@ -33,6 +33,10 @@ import {
   ShieldCheck,
   MapPin,
   Box,
+  HeartPulse,
+  Activity,
+  ZoomIn,
+  Target,
 } from 'lucide-react';
 
 interface FarmSimulator3DProps {
@@ -65,6 +69,29 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
   const [riskScenario, setRiskScenario] = useState<'normal' | 'flood' | 'drought'>('normal');
   const [hasFloodDefense, setHasFloodDefense] = useState<boolean>(false);
   const [hasDroughtDefense, setHasDroughtDefense] = useState<boolean>(false);
+
+  // 3D Tree Selection & Interactive Inspection State
+  interface InspectedTreeInfo {
+    id: string;
+    row: number;
+    col: number;
+    varietyTh: string;
+    varietyEn: string;
+    varietyId: string;
+    ageYears: number;
+    canopyDiameterM: number;
+    heightM: number;
+    fruitCount: number;
+    baggedRatioPct: number;
+    healthScore: number;
+    chlorophyllIndex: number; // NDVI 0-1
+    soilMoisturePct: number;
+    estimatedValueThb: number; // Asset appraisal value for BAAC
+    posX: number;
+    posZ: number;
+  }
+  const [inspectedTree, setInspectedTree] = useState<InspectedTreeInfo | null>(null);
+  const selectionRingRef = useRef<THREE.Mesh | null>(null);
 
   // Demo Mode 3D Action Listener
   useEffect(() => {
@@ -409,105 +436,210 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
   };
 
   // -------------------------------------------------------------
-  // Procedural 3-12 Part Composite Crop Builders (THREE.Group)
-  // With Realistic 3D Fruits (Durian, Palm, Rubber, Rice, Cassava)
+  // Procedural Realistic Mango 3D Fruit & Orchard Tree
+  // Characterized by:
+  // - Long pendulous thin panicle stalks hanging gracefully from canopy branches
+  // - Smooth, curved kidney/obovate shape (น้ำดอกไม้ / มหาชนก) with distinctive beak (beak tip/เพรียวยาว)
+  // - Golden yellow-green ripening gradient or blushing pink-orange for export varieties
+  // - Broad, lush domed canopy with glossy lanceolate leaves
   // -------------------------------------------------------------
-  const createDurianFruit = (fruitScale: number, isDistressed = false): THREE.Group => {
+  const createMangoFruit = (fruitScale: number, isDistressed = false, variety = 'namdokmai'): THREE.Group => {
     const fruitGroup = new THREE.Group();
 
-    // 1. Durian Stalk (ขั้วผลทุเรียน)
-    const stalkGeo = new THREE.CylinderGeometry(0.02 * fruitScale, 0.03 * fruitScale, 0.35 * fruitScale, 6);
-    const stalkMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.9 });
+    // 1. Slender Mango Stalk / Panicle (ก้านช่อผลมะม่วง เรียวยาวห้อยระย้า)
+    const stalkGeo = new THREE.CylinderGeometry(0.012 * fruitScale, 0.018 * fruitScale, 0.45 * fruitScale, 6);
+    const stalkMat = new THREE.MeshStandardMaterial({
+      color: 0x475522, // Olive green stalk
+      roughness: 0.7,
+    });
     const stalk = new THREE.Mesh(stalkGeo, stalkMat);
-    stalk.position.y = 0.17 * fruitScale;
+    stalk.position.y = 0.22 * fruitScale;
+    stalk.rotation.z = (Math.random() - 0.5) * 0.15;
     stalk.castShadow = true;
     fruitGroup.add(stalk);
 
-    // 2. Durian Body (ผลทุเรียนทรงรี หนามเตียนสีเขียวอมทอง)
-    const fruitColor = isDistressed ? 0x8a7238 : 0x889228;
-    const bodyGeo = new THREE.IcosahedronGeometry(0.28 * fruitScale, 1);
+    // 2. Mango Body (ผลมะม่วงน้ำดอกไม้ / มหาชนก ทรงรียาว โค้งมน มีปลายจะงอยพริ้ว)
+    // Use high-resolution SphereGeometry and deform vertices along Y/X to create authentic mango curves
+    const bodyGeo = new THREE.SphereGeometry(0.24 * fruitScale, 16, 16);
+    const pos = bodyGeo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i);
+      let y = pos.getY(i);
+      let z = pos.getZ(i);
+
+      // Elongate along vertical axis (ทรงรียาว)
+      y *= 1.55;
+
+      // Slight natural taper toward the beak (ส่วนปลายเรียวลง)
+      if (y < 0) {
+        const factor = 1.0 + y * 0.7;
+        x *= Math.max(0.45, factor);
+        z *= Math.max(0.45, factor);
+        // Characteristic curved mango beak (ส่วนโค้งจะงอยก้นมะม่วง)
+        x += Math.pow(Math.abs(y), 1.6) * 0.22;
+      } else {
+        // Broad shoulders near pedicel (ไหล่ผลผายกว้าง)
+        x *= 1.08;
+        z *= 0.95;
+      }
+
+      pos.setXYZ(i, x, y, z);
+    }
+    bodyGeo.computeVertexNormals();
+
+    // Mango skin colors
+    let skinColor = 0xf59e0b; // Golden Nam Dok Mai
+    let roughness = 0.35; // Glossy export skin
+    if (isDistressed) {
+      skinColor = 0x856b35; // Dull brownish-yellow
+      roughness = 0.75;
+    } else if (variety === 'mango_rad') {
+      skinColor = 0x22c55e; // Green Three-Flavor
+      roughness = 0.4;
+    } else if (variety === 'mango_mahachanok') {
+      skinColor = 0xf97316; // Rainbow blush orange-pink
+      roughness = 0.35;
+    }
+
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: fruitColor,
-      roughness: 0.85,
-      flatShading: true, // Gives distinct durian spine-cluster appearance
+      color: skinColor,
+      roughness: roughness,
+      metalness: 0.05,
     });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = -0.15 * fruitScale;
-    body.scale.set(1.0, 1.35, 1.0); // Elongated oval durian fruit shape
+    body.position.y = -0.16 * fruitScale;
+    body.rotation.z = -0.08; // Natural gentle tilt
     body.castShadow = true;
     fruitGroup.add(body);
 
-    // 3. Durian Calyx Tip (ก้นผลทุเรียน)
-    const tipGeo = new THREE.ConeGeometry(0.05 * fruitScale, 0.08 * fruitScale, 5);
-    const tipMat = new THREE.MeshStandardMaterial({ color: 0x4a3c20 });
-    const tip = new THREE.Mesh(tipGeo, tipMat);
-    tip.position.y = -0.52 * fruitScale;
-    tip.rotation.x = Math.PI;
-    fruitGroup.add(tip);
+    // 3. Realistic Export Foam Fruit Protection Bag (ถุงห่อผลมะม่วงสีทอง/ขาว คาร์บอน สำหรับเกรดส่งออก)
+    if (!isDistressed && variety === 'mango_namdokmai') {
+      const bagGeo = new THREE.CylinderGeometry(
+        0.18 * fruitScale,
+        0.22 * fruitScale,
+        0.58 * fruitScale,
+        10,
+        1,
+        true
+      );
+      const bagMat = new THREE.MeshStandardMaterial({
+        color: 0xfef08a,
+        roughness: 0.85,
+        transparent: true,
+        opacity: 0.45,
+        side: THREE.DoubleSide,
+      });
+      const bag = new THREE.Mesh(bagGeo, bagMat);
+      bag.position.y = -0.16 * fruitScale;
+      fruitGroup.add(bag);
+    }
 
     return fruitGroup;
   };
 
-  const buildDurianTree = (scale: number, distressed = false): THREE.Group => {
+  const buildMangoTree = (scale: number, distressed = false, cropVariety = 'mango_namdokmai'): THREE.Group => {
     const tree = new THREE.Group();
 
-    // Trunk (ลำต้นไม้ผล)
-    const trunkGeo = new THREE.CylinderGeometry(0.25 * scale, 0.45 * scale, 2.8 * scale, 8);
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3525, roughness: 0.9 });
+    // 1. Natural Wood Trunk (ลำต้นไม้มะม่วง เนื้อไม้สีเทาอมน้ำตาล แตกกิ่งต่ำ ทรงพุ่มกลมทึบ)
+    const trunkGeo = new THREE.CylinderGeometry(0.24 * scale, 0.42 * scale, 2.3 * scale, 10);
+    const trunkMat = new THREE.MeshStandardMaterial({
+      color: distressed ? 0x453528 : 0x544030,
+      roughness: 0.92,
+    });
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-    trunk.position.y = 1.4 * scale;
+    trunk.position.y = 1.15 * scale;
     trunk.castShadow = true;
     tree.add(trunk);
 
-    // Horizontal Primary Scaffold Branches (กิ่งหลักที่ผลทุเรียนจะห้อยอยู่)
-    const branchAngles = [0.2, 1.8, 3.4, 4.9];
+    // Root flare at ground base
+    const rootGeo = new THREE.ConeGeometry(0.6 * scale, 0.4 * scale, 8);
+    const root = new THREE.Mesh(rootGeo, trunkMat);
+    root.position.y = 0.2 * scale;
+    tree.add(root);
+
+    // 2. Main Scaffold Branches (กิ่งหลักแผ่ออกทรงโดม สไตล์ตัดแต่งกิ่งทรงเตี้ย High Density Orcharding)
+    const branchAngles = [0.1, 1.35, 2.7, 4.0, 5.2];
     branchAngles.forEach((angle, idx) => {
-      const branchHeight = (1.9 + (idx % 2) * 0.4) * scale;
-      const branchGeo = new THREE.CylinderGeometry(0.08 * scale, 0.12 * scale, 1.6 * scale, 6);
-      const branchMat = new THREE.MeshStandardMaterial({ color: 0x422f20, roughness: 0.9 });
+      const branchHeight = (1.6 + (idx % 3) * 0.25) * scale;
+      const branchLen = (1.5 + (idx % 2) * 0.3) * scale;
+      const branchGeo = new THREE.CylinderGeometry(0.09 * scale, 0.15 * scale, branchLen, 7);
+      const branchMat = new THREE.MeshStandardMaterial({ color: 0x483627, roughness: 0.9 });
       const branch = new THREE.Mesh(branchGeo, branchMat);
+      
       branch.position.set(0, branchHeight, 0);
-      branch.rotation.z = Math.PI / 2.3;
+      branch.rotation.z = Math.PI / 2.7;
       branch.rotation.y = angle;
       branch.castShadow = true;
       tree.add(branch);
 
-      // Attach Hanging Durian Fruits under the branches if Year >= 3 & showFruits
+      // Sub-branch tier
+      const subBranchGeo = new THREE.CylinderGeometry(0.04 * scale, 0.08 * scale, 0.9 * scale, 6);
+      const subBranch = new THREE.Mesh(subBranchGeo, branchMat);
+      const subX = Math.cos(angle) * branchLen * 0.65;
+      const subZ = Math.sin(angle) * branchLen * 0.65;
+      subBranch.position.set(subX, branchHeight + 0.2 * scale, subZ);
+      subBranch.rotation.z = Math.PI / 3.2;
+      subBranch.rotation.y = angle + 0.5;
+      tree.add(subBranch);
+
+      // Attach Hanging Clusters of Mangoes (ช่อมะม่วงห้อยระย้า) if Year >= 3 & showFruits
       if (showFruits && timelineYear >= 3) {
-        const fruitsPerBranch = timelineYear >= 10 ? 3 : timelineYear >= 5 ? 2 : 1;
+        const fruitsPerBranch = timelineYear >= 10 ? 4 : timelineYear >= 5 ? 3 : 1;
         for (let f = 1; f <= fruitsPerBranch; f++) {
-          const distAlongBranch = (0.5 + f * 0.38) * scale;
-          const durianFruit = createDurianFruit(
-            timelineYear >= 5 ? 1.0 * scale : 0.65 * scale,
-            distressed
-          );
-          // Position hanging straight down underneath this branch
-          const fx = Math.cos(angle) * distAlongBranch;
-          const fz = Math.sin(angle) * distAlongBranch;
-          durianFruit.position.set(fx, branchHeight - 0.25 * scale, fz);
-          tree.add(durianFruit);
+          const distAlongBranch = (0.55 + f * 0.32) * scale;
+          const mangoScale = (timelineYear >= 5 ? 1.05 : 0.7) * scale;
+          const mangoFruit = createMangoFruit(mangoScale, distressed, cropVariety);
+
+          const fx = Math.cos(angle) * distAlongBranch + (f % 2 === 0 ? 0.08 : -0.08) * scale;
+          const fz = Math.sin(angle) * distAlongBranch + (f % 2 === 0 ? -0.08 : 0.08) * scale;
+          // Mangoes hang downwards naturally below canopy
+          mangoFruit.position.set(fx, branchHeight - 0.28 * scale, fz);
+          tree.add(mangoFruit);
         }
       }
     });
 
-    // Primary Canopy Tier (Shifts color if distressed)
-    const canopy1Color = distressed ? 0x85752f : 0x1e5631;
-    const canopy1Geo = new THREE.DodecahedronGeometry(1.45 * scale, 1);
-    const canopy1Mat = new THREE.MeshStandardMaterial({ color: canopy1Color, roughness: 0.8, flatShading: true });
+    // 3. Lush Mango Canopy Tiers (ทรงพุ่มใบมะม่วงแน่นหนา กลมทึบ สีเขียวเข้มมันวาว)
+    const baseGreen = distressed ? 0x7c7334 : 0x14532d; // Deep forest mango green
+    const topGreen = distressed ? 0x8e8238 : 0x15803d;  // New flush / sunlit leaf green
+
+    // Tier 1 - Lower wide dome
+    const canopy1Geo = new THREE.DodecahedronGeometry(1.6 * scale, 1);
+    const canopy1Mat = new THREE.MeshStandardMaterial({
+      color: baseGreen,
+      roughness: 0.65,
+      flatShading: true,
+    });
     const canopy1 = new THREE.Mesh(canopy1Geo, canopy1Mat);
-    canopy1.position.y = 2.7 * scale;
-    canopy1.scale.set(1.25, 0.9, 1.25);
+    canopy1.position.y = 2.45 * scale;
+    canopy1.scale.set(1.4, 0.85, 1.4);
     canopy1.castShadow = true;
     tree.add(canopy1);
 
-    // Secondary Canopy Tier
-    const canopy2Color = distressed ? 0x9e8c33 : 0x27743d;
-    const canopy2Geo = new THREE.DodecahedronGeometry(1.05 * scale, 1);
-    const canopy2Mat = new THREE.MeshStandardMaterial({ color: canopy2Color, roughness: 0.75, flatShading: true });
+    // Tier 2 - Mid dense dome
+    const canopy2Geo = new THREE.DodecahedronGeometry(1.25 * scale, 1);
+    const canopy2Mat = new THREE.MeshStandardMaterial({
+      color: topGreen,
+      roughness: 0.6,
+      flatShading: true,
+    });
     const canopy2 = new THREE.Mesh(canopy2Geo, canopy2Mat);
-    canopy2.position.y = 3.6 * scale;
+    canopy2.position.set(0.15 * scale, 3.2 * scale, -0.1 * scale);
+    canopy2.scale.set(1.2, 0.9, 1.2);
     canopy2.castShadow = true;
     tree.add(canopy2);
+
+    // Tier 3 - Top flush apex
+    const canopy3Geo = new THREE.DodecahedronGeometry(0.85 * scale, 1);
+    const canopy3Mat = new THREE.MeshStandardMaterial({
+      color: distressed ? 0xa3913e : 0x16a34a,
+      roughness: 0.55,
+      flatShading: true,
+    });
+    const canopy3 = new THREE.Mesh(canopy3Geo, canopy3Mat);
+    canopy3.position.set(-0.1 * scale, 3.85 * scale, 0.1 * scale);
+    canopy3.castShadow = true;
+    tree.add(canopy3);
 
     return tree;
   };
@@ -929,6 +1061,93 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     scene.add(iotNodesGroup);
     iotNodesGroupRef.current = iotNodesGroup;
 
+    // Interactive Tree Selection Indicator Ring
+    const ringGeo = new THREE.RingGeometry(1.2, 1.45, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xfacc15, // Golden Mango Glow
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const selectionRing = new THREE.Mesh(ringGeo, ringMat);
+    selectionRing.rotation.x = -Math.PI / 2;
+    selectionRing.position.y = 0.08;
+    selectionRing.visible = false;
+    scene.add(selectionRing);
+    selectionRingRef.current = selectionRing;
+
+    // Raycaster for 3D clicks / taps
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let isDragging = false;
+    let downPos = { x: 0, y: 0 };
+
+    const handlePointerDown = (e: MouseEvent) => {
+      isDragging = false;
+      downPos = { x: e.clientX, y: e.clientY };
+    };
+
+    const handlePointerMove = (e: MouseEvent) => {
+      if (Math.abs(e.clientX - downPos.x) > 6 || Math.abs(e.clientY - downPos.y) > 6) {
+        isDragging = true;
+      }
+    };
+
+    const handlePointerUp = (e: MouseEvent) => {
+      if (isDragging) return;
+      if (!mountRef.current || !cameraRef.current || !plantGroupRef.current) return;
+
+      const rect = mountRef.current.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, cameraRef.current);
+      const intersects = raycaster.intersectObjects(plantGroupRef.current.children, true);
+
+      if (intersects.length > 0) {
+        // Find top-level plant mesh in plantGroup
+        let hitObj: THREE.Object3D | null = intersects[0].object;
+        while (hitObj && hitObj.parent !== plantGroupRef.current) {
+          hitObj = hitObj.parent;
+        }
+
+        if (hitObj && hitObj.userData) {
+          const u = hitObj.userData;
+          setInspectedTree({
+            id: u.id || 'TREE-01',
+            row: u.row || 1,
+            col: u.col || 1,
+            varietyTh: u.varietyTh || 'มะม่วงน้ำดอกไม้สีทอง',
+            varietyEn: u.varietyEn || 'Nam Dok Mai Sri Thong',
+            varietyId: u.varietyId || 'mango_namdokmai',
+            ageYears: u.ageYears || 5,
+            canopyDiameterM: u.canopyDiameterM || 3.8,
+            heightM: u.heightM || 3.4,
+            fruitCount: u.fruitCount || 45,
+            baggedRatioPct: u.baggedRatioPct || 92,
+            healthScore: u.healthScore || 96,
+            chlorophyllIndex: u.chlorophyllIndex || 0.88,
+            soilMoisturePct: u.soilMoisturePct || 68,
+            estimatedValueThb: u.estimatedValueThb || 1500,
+            posX: hitObj.position.x,
+            posZ: hitObj.position.z,
+          });
+
+          // Move selection ring to clicked tree
+          if (selectionRingRef.current) {
+            selectionRingRef.current.position.set(hitObj.position.x, 0.08, hitObj.position.z);
+            selectionRingRef.current.scale.set(u.canopyDiameterM * 0.42, u.canopyDiameterM * 0.42, 1);
+            selectionRingRef.current.visible = true;
+          }
+        }
+      }
+    };
+
+    const domElem = mountRef.current;
+    domElem.addEventListener('mousedown', handlePointerDown);
+    domElem.addEventListener('mousemove', handlePointerMove);
+    domElem.addEventListener('mouseup', handlePointerUp);
+
     let animationFrameId: number;
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
@@ -942,6 +1161,11 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
         const mat = r.material as THREE.MeshBasicMaterial;
         mat.opacity = Math.max(0, 1 - r.scale.x / 2.5);
       });
+
+      // Animate Selection Ring rotation & gentle pulse
+      if (selectionRingRef.current && selectionRingRef.current.visible) {
+        selectionRingRef.current.rotation.z += 0.015;
+      }
 
       renderer.render(scene, camera);
     };
@@ -957,6 +1181,9 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      domElem.removeEventListener('mousedown', handlePointerDown);
+      domElem.removeEventListener('mousemove', handlePointerMove);
+      domElem.removeEventListener('mouseup', handlePointerUp);
       cancelAnimationFrame(animationFrameId);
       controls.dispose();
       renderer.dispose();
@@ -1014,10 +1241,9 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     }
 
     const spacing =
-      selectedCrop === 'durian' ? 4.5 :
       selectedCrop === 'oilpalm' ? 4.8 :
       selectedCrop === 'rubber' ? 3.6 :
-      selectedCrop === 'mango' ? 3.4 : 1.8;
+      selectedCrop.includes('mango') ? 3.8 : 3.8;
 
     const countX = selectedCrop === 'cassava' ? 7 : 4;
     const countZ = selectedCrop === 'cassava' ? 7 : 4;
@@ -1028,11 +1254,37 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
         const posZ = iz * spacing + (Math.random() - 0.5) * 0.2;
 
         let plantMesh: THREE.Group;
-        if (selectedCrop === 'durian') plantMesh = buildDurianTree(growthScale, isPlantDistressed);
-        else if (selectedCrop === 'rubber') plantMesh = buildRubberTree(growthScale, isPlantDistressed);
+        if (selectedCrop === 'rubber') plantMesh = buildRubberTree(growthScale, isPlantDistressed);
         else if (selectedCrop === 'oilpalm') plantMesh = buildOilPalmTree(growthScale, isPlantDistressed);
         else if (selectedCrop === 'cassava') plantMesh = buildCassavaBush(growthScale, isPlantDistressed);
-        else plantMesh = buildDurianTree(growthScale, isPlantDistressed);
+        else plantMesh = buildMangoTree(growthScale, isPlantDistressed, selectedCrop);
+
+        // Assign individualized tree data for interactive clicking & inspection
+        const treeIndex = (ix + Math.floor(countX / 2)) * countZ + (iz + Math.floor(countZ / 2)) + 1;
+        const varietyInfo = CROPS[selectedCrop] || CROPS.mango_namdokmai;
+        const baseFruit = timelineYear >= 10 ? 120 : timelineYear >= 5 ? 65 : timelineYear >= 3 ? 25 : 0;
+        const fruitVariance = Math.round((Math.random() - 0.5) * 12);
+        const actualFruits = Math.max(0, baseFruit + fruitVariance);
+        const treeAge = timelineYear === 0 ? 0.5 : timelineYear === 1 ? 1.5 : timelineYear === 3 ? 3.5 : timelineYear === 5 ? 6 : 10;
+        const singleTreeValue = timelineYear >= 5 ? 1500 : timelineYear >= 3 ? 1000 : 500;
+
+        plantMesh.userData = {
+          id: `MNG-ROW${ix + Math.floor(countX / 2) + 1}-T${iz + Math.floor(countZ / 2) + 1}`,
+          row: ix + Math.floor(countX / 2) + 1,
+          col: iz + Math.floor(countZ / 2) + 1,
+          varietyTh: varietyInfo.nameThai.split('(')[0],
+          varietyEn: varietyInfo.nameEnglish.split('(')[0],
+          varietyId: selectedCrop,
+          ageYears: treeAge,
+          canopyDiameterM: +(3.2 * growthScale).toFixed(1),
+          heightM: +(3.8 * growthScale).toFixed(1),
+          fruitCount: actualFruits,
+          baggedRatioPct: actualFruits > 0 ? 94 : 0,
+          healthScore: isPlantDistressed ? 64 : 96,
+          chlorophyllIndex: isPlantDistressed ? 0.52 : 0.88,
+          soilMoisturePct: +(65 + (Math.random() - 0.5) * 6).toFixed(1),
+          estimatedValueThb: singleTreeValue,
+        };
 
         plantMesh.position.set(posX, 0, posZ);
         plantGroupRef.current.add(plantMesh);
@@ -1500,8 +1752,8 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
         <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
         {/* Top Left Floating Spec Badge (Clean Light Theme) */}
-        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-xl p-2.5 sm:p-3 text-slate-800 shadow-md max-w-[220px] sm:max-w-xs pointer-events-none text-xs">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-xl p-2.5 sm:p-3 text-slate-800 shadow-md max-w-[240px] sm:max-w-xs text-xs space-y-1.5">
+          <div className="flex items-center gap-2 mb-0.5">
             <div
               className={`w-2.5 h-2.5 rounded-full ${
                 riskScenario === 'flood'
@@ -1524,20 +1776,28 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
             <div className="pt-1 border-t border-slate-100 text-emerald-700 font-semibold text-[10px] sm:text-[11px] flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               <span className="truncate">
-                {selectedCrop === 'durian'
+                {selectedCrop.includes('mango')
                   ? timelineYear >= 3
                     ? lang === 'th'
-                      ? `ผลทุเรียน: ~${timelineYear >= 10 ? 80 : timelineYear >= 5 ? 45 : 15} ลูก/ต้น`
-                      : `Durians: ~${timelineYear >= 10 ? 80 : timelineYear >= 5 ? 45 : 15} fruits/tree`
-                    : lang === 'th' ? 'สะสมตาดอก' : 'Vegetative growth'
+                      ? `ผลมะม่วงส่งออก: ~${timelineYear >= 10 ? 120 : timelineYear >= 5 ? 65 : 25} ลูก/ต้น (ห่อถุงคาร์บอน)`
+                      : `Export Mangoes: ~${timelineYear >= 10 ? 120 : timelineYear >= 5 ? 65 : 25} fruits/tree`
+                    : lang === 'th' ? 'ระยะสะสมตาดอกและทรงพุ่ม' : 'Vegetative & canopy growth'
                   : selectedCrop === 'rubber'
                   ? lang === 'th' ? 'น้ำยาง: ~8.4 กก./ไร่' : 'Latex: ~8.4 kg/rai'
                   : selectedCrop === 'oilpalm'
                   ? lang === 'th' ? 'ทะลายสุก: 4 ทะลาย' : 'Fresh fruit bunches'
                   : selectedCrop === 'rice'
                   ? lang === 'th' ? 'รวงทอง: 750 กก./ไร่' : 'Golden panicles'
-                  : lang === 'th' ? 'หัวมัน: 4.5 ตัน/ไร่' : 'Cassava tubers'}
+                  : lang === 'th' ? 'ผลผลิตมะม่วงสมบูรณ์' : 'Export quality mangoes'}
               </span>
+            </div>
+          </div>
+
+          {/* Integrated Tap-to-Inspect Helper Badge without any overlap */}
+          <div className="pt-1.5 border-t border-amber-200/80">
+            <div className="bg-amber-100/90 text-amber-950 text-[10px] sm:text-[10.5px] font-bold px-2 py-1 rounded-lg flex items-center gap-1.5 border border-amber-300/80">
+              <Target className="w-3.5 h-3.5 text-amber-800 shrink-0" />
+              <span>{lang === 'th' ? 'แตะ/คลิกต้นไม้ 3D เพื่อดูข้อมูลรายต้น' : 'Click any 3D Tree to Inspect'}</span>
             </div>
           </div>
         </div>
@@ -1758,6 +2018,143 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
             <div className="text-[10px] text-slate-500 border-t border-slate-100 pt-1.5 flex items-center justify-between">
               <span>โครงข่ายเซนเซอร์เกษตรดิจิทัล (Smart Agri)</span>
               <span className="text-emerald-700 font-semibold">● Online 100%</span>
+            </div>
+          </div>
+        )}
+
+        {/* 3D Tree Individual Telemetry Inspector Card (Interactive Drill-down) */}
+        {inspectedTree && (
+          <div className="absolute bottom-20 left-3 sm:left-4 z-30 bg-white/95 backdrop-blur-md border border-amber-300/80 rounded-2xl p-3.5 sm:p-4 text-slate-900 w-[280px] sm:w-[320px] shadow-2xl space-y-2.5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-2 border-b border-amber-100">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-400 to-emerald-600 flex items-center justify-center text-white shadow-xs">
+                  <Trees className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold text-xs text-slate-900">{inspectedTree.id}</span>
+                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-full">
+                      แถว {inspectedTree.row} ต้นที่ {inspectedTree.col}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    {lang === 'th' ? inspectedTree.varietyTh : inspectedTree.varietyEn}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setInspectedTree(null);
+                  if (selectionRingRef.current) selectionRingRef.current.visible = false;
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                aria-label="Close tree inspector"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Tree Specs & Telemetry Grid */}
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+              <div className="bg-amber-50/80 p-2 rounded-xl border border-amber-200/70">
+                <span className="text-[10px] text-slate-500 block font-sans font-medium">
+                  {lang === 'th' ? 'ผลผลิตบนต้นจริง' : 'Fruit Count'}
+                </span>
+                <span className="text-sm font-extrabold text-amber-900">
+                  {inspectedTree.fruitCount} {lang === 'th' ? 'ผล' : 'fruits'}
+                </span>
+                <span className="text-[9.5px] text-emerald-700 block font-sans">
+                  ห่อถุงคาร์บอน {inspectedTree.baggedRatioPct}%
+                </span>
+              </div>
+
+              <div className="bg-emerald-50/80 p-2 rounded-xl border border-emerald-200/70">
+                <span className="text-[10px] text-slate-500 block font-sans font-medium">
+                  {lang === 'th' ? 'มูลค่าประเมินหลักทรัพย์' : 'Asset Appraisal'}
+                </span>
+                <span className="text-sm font-extrabold text-emerald-800">
+                  ฿{inspectedTree.estimatedValueThb.toLocaleString()}
+                </span>
+                <span className="text-[9.5px] text-slate-500 block font-sans">
+                  ธ.ก.ส. รับรอง
+                </span>
+              </div>
+            </div>
+
+            {/* Tree Bio-Health Readings */}
+            <div className="space-y-1.5 text-[11px] font-mono bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 flex items-center gap-1 font-sans">
+                  <HeartPulse className="w-3 h-3 text-rose-500" />
+                  {lang === 'th' ? 'คะแนนสุขภาพต้น:' : 'Health Score:'}
+                </span>
+                <span className="font-bold text-emerald-700">{inspectedTree.healthScore}% (สมบูรณ์มาก)</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 flex items-center gap-1 font-sans">
+                  <Activity className="w-3 h-3 text-emerald-600" />
+                  {lang === 'th' ? 'ดัชนีคลอโรฟิลล์ (NDVI):' : 'Chlorophyll (NDVI):'}
+                </span>
+                <span className="font-bold text-slate-800">{inspectedTree.chlorophyllIndex} (ใบเขียวเข้ม)</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 flex items-center gap-1 font-sans">
+                  <Droplets className="w-3 h-3 text-sky-500" />
+                  {lang === 'th' ? 'ความชื้นโคนต้น:' : 'Root Moisture:'}
+                </span>
+                <span className="font-bold text-sky-700">{inspectedTree.soilMoisturePct}%</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-sans">{lang === 'th' ? 'ทรงพุ่ม / ความสูง:' : 'Canopy / Height:'}</span>
+                <span className="font-bold text-slate-700">{inspectedTree.canopyDiameterM}m / {inspectedTree.heightM}m</span>
+              </div>
+            </div>
+
+            {/* Interactive Actions for this tree */}
+            <div className="flex items-center gap-1.5 pt-1">
+              <button
+                onClick={() => {
+                  if (cameraRef.current && controlsRef.current) {
+                    controlsRef.current.target.set(inspectedTree.posX, 1.5, inspectedTree.posZ);
+                    cameraRef.current.position.set(
+                      inspectedTree.posX + 4,
+                      3.5,
+                      inspectedTree.posZ + 5
+                    );
+                    controlsRef.current.update();
+                  }
+                }}
+                className="flex-1 py-1.5 px-2 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1 shadow-2xs border border-amber-400/80 cursor-pointer"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+                <span>{lang === 'th' ? 'ซูมเจาะจงต้นนี้' : 'Focus Tree'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  // Trigger mini pulse animation
+                  if (selectionRingRef.current) {
+                    selectionRingRef.current.scale.set(3, 3, 1);
+                    setTimeout(() => {
+                      if (selectionRingRef.current) {
+                        selectionRingRef.current.scale.set(
+                          inspectedTree.canopyDiameterM * 0.42,
+                          inspectedTree.canopyDiameterM * 0.42,
+                          1
+                        );
+                      }
+                    }, 250);
+                  }
+                }}
+                className="py-1.5 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-lg text-xs flex items-center gap-1 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>{lang === 'th' ? 'ตรวจซ้ำ' : 'Audit'}</span>
+              </button>
             </div>
           </div>
         )}

@@ -122,18 +122,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }`}
       >
         {/* Brand Header */}
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-5 border-b border-amber-100/60 bg-gradient-to-r from-amber-50/40 via-white to-emerald-50/30 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-700/20">
-              <Sprout className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-emerald-600 flex items-center justify-center text-white shadow-md shadow-amber-500/25 ring-2 ring-amber-200">
+              <Sprout className="w-6 h-6 text-white drop-shadow-xs" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-slate-900 tracking-tight text-lg">
                   Plotty
                 </span>
-                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">
-                  SMART PLOT
+                <span className="text-[10px] bg-amber-100 text-amber-900 font-black px-1.5 py-0.5 rounded-full border border-amber-200">
+                  MANGO GOLD
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium">
@@ -180,16 +180,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => handleSelectTab(item.id)}
                 className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-left text-sm font-medium transition-all group ${
                   isActive
-                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30 font-semibold'
-                    : 'text-slate-700 hover:bg-slate-100/80 hover:text-slate-900'
+                    ? 'bg-gradient-to-r from-emerald-700 to-emerald-600 text-white shadow-sm shadow-emerald-700/25 font-semibold ring-1 ring-amber-300/40'
+                    : 'text-slate-700 hover:bg-amber-50/70 hover:text-slate-900'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
                       isActive
-                        ? 'bg-white/20 text-white'
-                        : 'bg-slate-100 text-slate-600 group-hover:bg-white group-hover:text-emerald-700'
+                        ? 'bg-amber-400 text-slate-950 font-bold shadow-xs'
+                        : 'bg-amber-50 text-emerald-800 border border-amber-100 group-hover:bg-amber-100 group-hover:text-emerald-900'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -200,7 +200,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {item.badgeTh && (
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full font-bold ml-2 shrink-0 ${
-                      isActive ? 'bg-white text-emerald-900' : item.badgeColor
+                      isActive ? 'bg-amber-300 text-amber-950' : item.badgeColor
                     }`}
                   >
                     {lang === 'th' ? item.badgeTh : item.badgeEn}

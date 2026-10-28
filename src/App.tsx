@@ -53,52 +53,54 @@ export default function App() {
       {/* 2. Main Content Wrapper */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile Top Navigation Bar (< md screens) */}
-        <header className="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+        <header className="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-amber-200/60 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setIsOpenMobile(true)}
-              className="p-2 -ml-1 text-slate-700 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors"
+              className="p-2 -ml-1 text-slate-700 hover:text-slate-900 rounded-lg hover:bg-amber-50 transition-colors"
               aria-label="Open navigation menu"
             >
               <Menu className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-xs">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-emerald-600 flex items-center justify-center text-white shadow-xs">
                 <Sprout className="w-4 h-4" />
               </div>
               <span className="font-extrabold text-slate-900 text-base">Plotty</span>
+              <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded">มะม่วง</span>
             </div>
           </div>
 
           <button
             onClick={() => setIsHappyPathActive(true)}
-            className="px-3 py-1.5 text-white bg-rose-600 hover:bg-rose-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+            className="px-3 py-1.5 text-slate-950 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer border border-amber-400/50"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+            <Sparkles className="w-3.5 h-3.5 text-amber-900" />
             <span>{lang === 'th' ? 'สาธิต Happy Path' : 'Live Demo'}</span>
           </button>
         </header>
 
         {/* Top Desktop Live Market Ticker & Happy Path Demo Launcher Bar */}
-        <div className="bg-slate-900 text-slate-200 py-2 px-4 sm:px-6 lg:px-8 border-b border-slate-800 text-xs">
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-slate-200 py-2.5 px-4 sm:px-6 lg:px-8 border-b border-amber-400/20 text-xs">
           <div className="flex flex-wrap items-center justify-between gap-3 font-mono">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span className="font-bold text-amber-400">
                 {lang === 'th' ? 'ตลาดมะม่วงส่งออก & ล้งรับซื้อ:' : 'Mango Market Ticker:'}
               </span>
-              <span className="text-slate-300 truncate font-sans">
+              <span className="text-slate-200 truncate font-sans">
                 {lang === 'th'
-                  ? 'น้ำดอกไม้สีทองเกรดส่งออก ฿45/กก. (+4.5%) · มหาชนกสีรุ้ง ฿55/กก. · เขียวสามรส ฿25/กก. · True 5G IoT: ออนไลน์ 100%'
-                  : 'Nam Dok Mai Export ฿45/kg (+4.5%) · Mahachanok ฿55/kg · Green Three-Flavor ฿25/kg · True 5G IoT: Online 100%'}
+                  ? 'น้ำดอกไม้สีทองเกรดพรีเมียม ฿45/กก. (+4.5%) · มหาชนกส่งออก ฿55/กก. (+6.2%) · เขียวสามรส ฿25/กก. · True 5G IoT: ออนไลน์ 100%'
+                  : 'Nam Dok Mai Export ฿45/kg (+4.5%) · Mahachanok ฿55/kg (+6.2%) · Green Three-Flavor ฿25/kg · True 5G IoT: Online 100%'}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsHappyPathActive(true)}
-                className="text-slate-900 bg-emerald-400 hover:bg-emerald-300 px-3 py-1 rounded-lg text-xs font-sans font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                className="text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:brightness-105 px-3 py-1 rounded-lg text-xs font-sans font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs border border-amber-300/80"
               >
-                <Sparkles className="w-3.5 h-3.5 text-slate-900" />
+                <Sparkles className="w-3.5 h-3.5 text-amber-950" />
                 <span>{lang === 'th' ? 'สาธิตระบบ 35 วินาที' : '35s System Demo'}</span>
               </button>
             </div>

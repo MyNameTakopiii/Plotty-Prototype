@@ -319,17 +319,17 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
         onSelectProvince={setSelectedProvince}
       />
 
-      {/* 3. Hero Feature: Agri-Credit & Living Asset Collateral Score Bar (Clean Light Theme) */}
-      <div className="bg-white text-slate-900 rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200/90">
+      {/* 3. Hero Feature: Agri-Credit & Living Asset Collateral Score Bar (Signature White + Mango Green + Mango Gold Theme) */}
+      <div className="bg-white text-slate-900 rounded-2xl p-5 sm:p-6 shadow-sm border border-amber-200/80 ring-1 ring-amber-100">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-bold tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+              <span className="text-[11px] font-bold tracking-wide uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-950 border border-amber-300">
                 {lang === 'th'
                   ? 'พ.ร.บ.หลักประกันทางธุรกิจ พ.ศ. 2558'
                   : 'Business Collateral Act 2558'}
               </span>
-              <span className="text-[11px] font-semibold text-slate-500">
+              <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                 {lang === 'th'
                   ? 'ประเมินต้นมะม่วงเป็นหลักประกันสินเชื่อ ธ.ก.ส.'
                   : 'Audited Living Asset for Bank Collateral'}
@@ -337,8 +337,8 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
               <span>{lang === 'th' ? 'ดัชนีความน่าเชื่อถือสินเชื่อแปลงเกษตร:' : 'Plot Agri-Credit Rating:'}</span>
-              <span className="text-emerald-700">94 / 100</span>
-              <span className="text-xs bg-emerald-600 text-white font-extrabold px-2 py-0.5 rounded-md">
+              <span className="text-emerald-700 font-mono">94 / 100</span>
+              <span className="text-xs bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-md shadow-xs border border-amber-500/40">
                 GRADE A+
               </span>
             </h2>
@@ -350,23 +350,23 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-            <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200 text-right">
+            <div className="bg-amber-50/80 rounded-xl p-3 border border-amber-200 text-right">
               <span className="text-[10px] text-slate-600 block font-semibold">
                 {lang === 'th' ? 'วงเงินสินเชื่อ ธ.ก.ส. แนะนำ' : 'BAAC Pre-Approved Limit'}
               </span>
-              <span className="text-lg font-black text-amber-800 font-mono">
+              <span className="text-lg font-black text-amber-900 font-mono">
                 ฿2,500,000
               </span>
-              <span className="text-[10px] text-emerald-700 block font-mono font-bold">
+              <span className="text-[10px] text-emerald-800 block font-mono font-bold">
                 MRR - 2.25% (3.75%/ปี)
               </span>
             </div>
 
             <button
               onClick={() => setShowPassportModal(true)}
-              className="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer hover:scale-[1.02]"
+              className="px-4 py-3 bg-gradient-to-r from-emerald-700 to-emerald-600 hover:from-emerald-600 hover:to-emerald-500 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer hover:scale-[1.02] border border-amber-300/40"
             >
-              <FileText className="w-4 h-4" />
+              <FileText className="w-4 h-4 text-amber-300" />
               <span>{lang === 'th' ? 'เปิดใบรับรองสินทรัพย์ดิจิทัล' : 'Digital Farm Passport'}</span>
             </button>
           </div>

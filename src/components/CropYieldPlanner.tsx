@@ -33,7 +33,8 @@ export const CropYieldPlanner: React.FC<CropYieldPlannerProps> = ({
   const [soilType, setSoilType] = useState<string>('sandy_loam');
   const [waterAccess, setWaterAccess] = useState<string>('pond_well');
   const [farmingGoal, setFarmingGoal] = useState<string>('high_profit');
-  const [chosenCropId, setChosenCropId] = useState<string>('durian');
+  const defaultCropId = 'mango_namdokmai';
+  const [chosenCropId, setChosenCropId] = useState<string>(defaultCropId);
 
   // Demo Mode Action Listener
   React.useEffect(() => {
@@ -56,7 +57,7 @@ export const CropYieldPlanner: React.FC<CropYieldPlannerProps> = ({
   }, []);
 
   const totalSqm = raiNganWaToSqm(rai, ngan, wa);
-  const selectedCrop = CROPS[chosenCropId] || CROPS.durian;
+  const selectedCrop = CROPS[chosenCropId] || CROPS[defaultCropId] || Object.values(CROPS)[0];
 
   // Compute suitability scores for crops based on inputs
   const suitabilityScores = Object.values(CROPS).map((c) => {

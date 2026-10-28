@@ -20,15 +20,17 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '20mb' }));
 
-// Shared GoogleGenAI Client
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
-});
+// Shared GoogleGenAI Client (initialized lazily or conditionally when GEMINI_API_KEY is present)
+const ai = process.env.GEMINI_API_KEY
+  ? new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    })
+  : null;
 
 // -------------------------------------------------------------
 // API: Plant Health Multimodal Vision Diagnostic
@@ -66,7 +68,7 @@ Provide a thorough, accurate diagnosis identifying:
 Be scientifically rigorous, specifically for tropical agriculture in Thailand (e.g. Monthong Durian, Jasmine Rice, Cassava, Oil Palm, Rubber, Mango).
 `;
 
-    if (process.env.GEMINI_API_KEY) {
+    if (process.env.GEMINI_API_KEY && ai) {
       const response = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
         contents: {
@@ -221,7 +223,7 @@ CRITICAL RULES:
 - MANDATORY DISCLAIMER: Always remind the user that this advice provides statutory informational guidance, and they must confirm final document processing with their local provincial Land Office (สำนักงานที่ดิน) or provincial ALRO (สำนักงาน ส.ป.ก. จังหวัด) before executing contracts.
 `;
 
-    if (process.env.GEMINI_API_KEY) {
+    if (process.env.GEMINI_API_KEY && ai) {
       const contents = [
         ...history.map((h: any) => ({
           role: h.role === 'user' ? 'user' : 'model',
@@ -288,7 +290,7 @@ Include:
 4. Practical recommendation for farmers regarding harvest timing and forward sales / storage.
 `;
 
-    if (process.env.GEMINI_API_KEY) {
+    if (process.env.GEMINI_API_KEY && ai) {
       const response = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
         contents: prompt,

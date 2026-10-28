@@ -27,7 +27,8 @@ interface PriceForecasterProps {
 }
 
 export const PriceForecaster: React.FC<PriceForecasterProps> = ({ lang }) => {
-  const [selectedCrop, setSelectedCrop] = useState<string>('durian');
+  const defaultCropId = 'mango_namdokmai';
+  const [selectedCrop, setSelectedCrop] = useState<string>(defaultCropId);
   const [compareCrop, setCompareCrop] = useState<string>('none');
   const [horizonMonths, setHorizonMonths] = useState<number>(6); // 3, 6, 12
   const [showScenarios, setShowScenarios] = useState<boolean>(true);
@@ -44,7 +45,7 @@ export const PriceForecaster: React.FC<PriceForecasterProps> = ({ lang }) => {
     const handleDemoAction = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail?.action === 'select_forecast_crop') {
-        const cropId = customEvent.detail.cropId || 'durian';
+        const cropId = customEvent.detail.cropId || defaultCropId;
         setSelectedCrop(cropId);
       } else if (customEvent.detail?.action === 'open_fair_price_calc') {
         setShowFairPriceCalc(true);
@@ -54,7 +55,7 @@ export const PriceForecaster: React.FC<PriceForecasterProps> = ({ lang }) => {
     return () => window.removeEventListener('kasetthai_demo_action', handleDemoAction);
   }, []);
 
-  const primaryCrop = CROPS[selectedCrop] || CROPS.durian;
+  const primaryCrop = CROPS[selectedCrop] || CROPS[defaultCropId] || Object.values(CROPS)[0];
   const secondaryCrop = compareCrop !== 'none' ? CROPS[compareCrop] : null;
 
   // Filter series based on horizon
