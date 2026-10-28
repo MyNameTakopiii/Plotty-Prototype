@@ -318,8 +318,8 @@ export const EsgCarbonCalculator: React.FC<EsgCarbonCalculatorProps> = ({
             <div>
               <span className="font-bold text-slate-900 block">
                 {lang === 'th'
-                  ? 'ระบบน้ำหยดอัจฉริยะ True 5G Smart Drip (70 ไร่)'
-                  : 'True 5G Precision Drip Irrigation (70 Rai)'}
+                  ? 'ระบบน้ำหยดอัจฉริยะ Smart Precision Drip (70 ไร่)'
+                  : 'Precision Drip Irrigation (70 Rai)'}
               </span>
               <span className="text-[11px] text-slate-600 leading-relaxed block mt-1">
                 {lang === 'th'

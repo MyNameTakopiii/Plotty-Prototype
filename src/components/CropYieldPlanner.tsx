@@ -209,7 +209,7 @@ export const CropYieldPlanner: React.FC<CropYieldPlannerProps> = ({
                 className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 focus:ring-2 focus:ring-emerald-500"
               >
                 <option value="canal">คลองส่งน้ำชลประทาน + บ่อพักสระประจำแปลง (High Security)</option>
-                <option value="pond_well">สระกักเก็บน้ำ + บ่อบาดาลโซลาร์เซลล์ True 5G Smart Drip (Optimal)</option>
+                <option value="pond_well">สระกักเก็บน้ำ + บ่อบาดาลโซลาร์เซลล์ Smart Drip (Optimal)</option>
                 <option value="rainfed">อาศัยสระกักเก็บน้ำฝนธรรมชาติ (Rainfed Storage)</option>
               </select>
             </div>

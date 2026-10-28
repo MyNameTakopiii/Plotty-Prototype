@@ -43,9 +43,19 @@ import {
   Navigation,
 } from 'lucide-react';
 
+export interface Plot3DInfo {
+  plotId?: string;
+  cropId: string;
+  areaRai: number;
+  treeCount?: number;
+  name: string;
+  treeAgeYears?: number;
+  healthScore?: number;
+}
+
 interface FarmSimulator3DProps {
   lang: 'th' | 'en';
-  initialPlot?: { cropId: string; areaRai: number; name: string } | null;
+  initialPlot?: Plot3DInfo | null;
 }
 
 export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialPlot }) => {
@@ -58,14 +68,14 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
   // Simulation & Crop State
   const [selectedCrop, setSelectedCrop] = useState<string>(initialPlot?.cropId || 'mango_namdokmai');
   const [pendingCrop, setPendingCrop] = useState<string>(initialPlot?.cropId || 'mango_namdokmai');
-  const [timelineYear, setTimelineYear] = useState<number>(5); // 0, 1, 3, 5, 10
-  const [plotAreaRai, setPlotAreaRai] = useState<number>(initialPlot?.areaRai || 4);
+  const [timelineYear, setTimelineYear] = useState<number>(initialPlot?.treeAgeYears ? (initialPlot.treeAgeYears >= 8 ? 10 : initialPlot.treeAgeYears >= 5 ? 5 : 1) : 5);
+  const [plotAreaRai, setPlotAreaRai] = useState<number>(initialPlot?.areaRai || 70);
   const [plotAreaNgan, setPlotAreaNgan] = useState<number>(0);
   const [isDockCollapsed, setIsDockCollapsed] = useState<boolean>(false);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [hasSimulated, setHasSimulated] = useState<boolean>(true);
   const [showFruits, setShowFruits] = useState<boolean>(true); // Toggle to show/hide 3D fruits
-  const [show5GNodes, setShow5GNodes] = useState<boolean>(true); // True 5G Smart IoT Overlay
+  const [show5GNodes, setShow5GNodes] = useState<boolean>(true); // Smart IoT Overlay
   const [selected5GNode, setSelected5GNode] = useState<'node-1' | 'node-2' | 'node-3'>('node-1');
   const [satelliteLayer, setSatelliteLayer] = useState<'normal' | 'ndvi' | 'ndwi'>('normal'); // Satellite AI NDVI/NDWI Heatmaps
 
@@ -110,6 +120,25 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     window.addEventListener('kasetthai_demo_action', handleDemoAction);
     return () => window.removeEventListener('kasetthai_demo_action', handleDemoAction);
   }, []);
+
+  // Listen for initialPlot prop changes (Plots A, B, C selection from Dashboard)
+  useEffect(() => {
+    if (initialPlot) {
+      if (initialPlot.cropId) {
+        setSelectedCrop(initialPlot.cropId);
+        setPendingCrop(initialPlot.cropId);
+      }
+      if (initialPlot.areaRai) {
+        setPlotAreaRai(initialPlot.areaRai);
+      }
+      if (initialPlot.treeAgeYears !== undefined) {
+        setTimelineYear(initialPlot.treeAgeYears >= 8 ? 10 : initialPlot.treeAgeYears >= 5 ? 5 : 1);
+      }
+      if (initialPlot.plotId === 'plot_c') {
+        setSelected5GNode('node-1');
+      }
+    }
+  }, [initialPlot]);
   
   // 2D to 3D Conversion State
   const [uploaded2DImage, setUploaded2DImage] = useState<string | null>(null);
@@ -1266,7 +1295,7 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     irrigationGroupRef.current = irrigationGroup;
 
     // -------------------------------------------------------------
-    // True 5G Smart Agriculture IoT Sensor Towers (Nodes 1, 2, 3)
+    // Smart Agriculture IoT Sensor Towers (Nodes 1, 2, 3)
     // -------------------------------------------------------------
     const iotNodesGroup = new THREE.Group();
     const pulsingRings: THREE.Mesh[] = [];
@@ -1557,7 +1586,7 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     }
 
     // Update Irrigation & Swale Mesh
-    // Update True 5G IoT Nodes Visibility
+    // Update Smart IoT Nodes Visibility
     if (iotNodesGroupRef.current) {
       iotNodesGroupRef.current.visible = show5GNodes;
     }
@@ -1586,13 +1615,16 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
       }
     }
 
+    const isPlotA = initialPlot?.plotId === 'plot_a' || plotAreaRai >= 70;
+    const isPlotB = initialPlot?.plotId === 'plot_b' || (plotAreaRai >= 20 && plotAreaRai < 70);
+
+    const countX = selectedCrop === 'cassava' ? 7 : isPlotA ? 8 : isPlotB ? 5 : 3;
+    const countZ = selectedCrop === 'cassava' ? 7 : isPlotA ? 8 : isPlotB ? 5 : 3;
+
     const spacing =
       selectedCrop === 'oilpalm' ? 4.8 :
       selectedCrop === 'rubber' ? 3.6 :
-      selectedCrop.includes('mango') ? 3.8 : 3.8;
-
-    const countX = selectedCrop === 'cassava' ? 7 : 4;
-    const countZ = selectedCrop === 'cassava' ? 7 : 4;
+      isPlotA ? 3.2 : isPlotB ? 3.8 : 4.4;
 
     for (let ix = -Math.floor(countX / 2); ix <= Math.floor(countX / 2); ix++) {
       for (let iz = -Math.floor(countZ / 2); iz <= Math.floor(countZ / 2); iz++) {
@@ -2668,7 +2700,7 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
 
               {/* Free Camera Movement Hint */}
               <div className="text-[9.5px] text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200/70 font-sans text-center">
-                {lang === 'th' ? '🖱️ คลิกเมาส์ซ้ายลากหมุน • ขวาลากแพน • สกอลล์ซูมเข้าออกได้อย่างอิสระ' : '🖱️ Left-drag to orbit • Right-drag to pan • Scroll to zoom'}
+                {lang === 'th' ? 'คลิกเมาส์ซ้ายลากหมุน • ขวาลากแพน • สกอลล์ซูมเข้าออกได้อย่างอิสระ' : 'Left-drag to orbit • Right-drag to pan • Scroll to zoom'}
               </div>
             </div>
           </div>

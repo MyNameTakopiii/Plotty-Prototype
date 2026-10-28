@@ -52,15 +52,15 @@ export const PitchDemoModal: React.FC<PitchDemoModalProps> = ({
     },
     {
       id: 'step-2',
-      titleTh: '2. 3D Digital Twin ตรวจรับรองแปลงทางไกล & True 5G IoT',
-      titleEn: '2. 3D Digital Twin Remote Asset Audit & True 5G IoT',
+      titleTh: '2. 3D Digital Twin ตรวจรับรองแปลงทางไกล & เซนเซอร์ IoT ไร่นา',
+      titleEn: '2. 3D Digital Twin Remote Asset Audit & Smart IoT',
       tab: 'simulator',
       descTh:
-        'แปลงภาพสวนเป็นโมเดล 3D ตรวจนับผลมะม่วงน้ำดอกไม้และถุงห่อคาร์บอนบนกิ่งจริง พร้อมสถานีเซนเซอร์วัดดิน/อากาศ True 5G IoT และ Heatmap ดาวเทียม NDVI',
+        'แปลงภาพสวนเป็นโมเดล 3D ตรวจนับผลมะม่วงน้ำดอกไม้และถุงห่อคาร์บอนบนกิ่งจริง พร้อมสถานีเซนเซอร์วัดดิน/อากาศ Smart IoT และ Heatmap ดาวเทียม NDVI',
       descEn:
-        'Converts land photos into realistic 3D Digital Twin with mango fruit & bagging inspection and True 5G IoT sensor pole telemetry.',
-      badgeTh: 'Deep Tech & 5G Ecosystem',
-      badgeColor: 'bg-rose-100 text-rose-800',
+        'Converts land photos into realistic 3D Digital Twin with mango fruit & bagging inspection and Smart IoT sensor pole telemetry.',
+      badgeTh: 'Deep Tech & Agri-IoT',
+      badgeColor: 'bg-emerald-100 text-emerald-800',
     },
     {
       id: 'step-3',

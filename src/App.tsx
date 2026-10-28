@@ -26,12 +26,16 @@ export default function App() {
 
   // Plot state to pass from FarmDashboard directly into 3D Simulator
   const [target3DPlot, setTarget3DPlot] = useState<{
+    plotId?: string;
     cropId: string;
     areaRai: number;
+    treeCount?: number;
     name: string;
+    treeAgeYears?: number;
+    healthScore?: number;
   } | null>(null);
 
-  const handleSelectPlotFor3D = (plot: { cropId: string; areaRai: number; name: string }) => {
+  const handleSelectPlotFor3D = (plot: any) => {
     setTarget3DPlot(plot);
     setCurrentTab('simulator');
   };
@@ -90,8 +94,8 @@ export default function App() {
               </span>
               <span className="text-slate-200 truncate font-sans">
                 {lang === 'th'
-                  ? 'น้ำดอกไม้สีทองเกรดพรีเมียม ฿45/กก. (+4.5%) · มหาชนกส่งออก ฿55/กก. (+6.2%) · เขียวสามรส ฿25/กก. · True 5G IoT: ออนไลน์ 100%'
-                  : 'Nam Dok Mai Export ฿45/kg (+4.5%) · Mahachanok ฿55/kg (+6.2%) · Green Three-Flavor ฿25/kg · True 5G IoT: Online 100%'}
+                  ? 'น้ำดอกไม้สีทองเกรดพรีเมียม ฿45/กก. (+4.5%) · มหาชนกส่งออก ฿55/กก. (+6.2%) · เขียวสามรส ฿25/กก.'
+                  : 'Nam Dok Mai Export ฿45/kg (+4.5%) · Mahachanok ฿55/kg (+6.2%) · Green Three-Flavor ฿25/kg'}
               </span>
             </div>
 
@@ -109,7 +113,9 @@ export default function App() {
 
         {/* Main Routed Content Area */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {currentTab === 'home' && (
+          {currentTab === 'simulator' ? (
+            <FarmSimulator3D lang={lang} initialPlot={target3DPlot} />
+          ) : (
             <FarmerHome
               lang={lang}
               setCurrentTab={setCurrentTab}
@@ -117,18 +123,6 @@ export default function App() {
               setSelectedProvince={setSelectedProvince}
               onSelectPlotFor3D={handleSelectPlotFor3D}
             />
-          )}
-
-          {currentTab === 'simulator' && (
-            <FarmSimulator3D lang={lang} initialPlot={target3DPlot} />
-          )}
-
-          {currentTab === 'forecast' && <PriceForecaster lang={lang} />}
-
-          {currentTab === 'advisor' && <UnifiedAgriAdvisor lang={lang} />}
-
-          {currentTab === 'planner' && (
-            <CropYieldPlanner lang={lang} selectedProvince={selectedProvince} />
           )}
         </main>
 
