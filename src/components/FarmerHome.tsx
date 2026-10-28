@@ -214,8 +214,8 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
       id: 'alert-4',
       titleTh: 'โฉนดเพื่อเกษตรกรรม ส.ป.ก. ผ่านการรับรองสิทธิ์',
       titleEn: 'ALRO Agricultural Title Verified for Credit',
-      descTh: 'แปลงที่ดิน 70 ไร่ ผ่านเกณฑ์ระเบียบปี 2566 พร้อมใช้ต้นมะม่วงเป็นหลักประกันขอสินเชื่อ ธ.ก.ส. ดอกเบี้ยพิเศษ',
-      descEn: '70-rai land meets 2023 ALRO decree, eligible to use mango trees as BAAC loan collateral.',
+      descTh: 'แปลงที่ดิน 70 ไร่ ตรวจสอบระเบียบปี 2566 พร้อมประเมินต้นมะม่วงเป็นหลักทรัพย์ตามเกณฑ์สินเชื่อดอกเบี้ยพิเศษ',
+      descEn: '70-rai land meets 2023 ALRO decree, eligible for living tree collateral loan evaluation.',
       timeTh: '2 วันที่แล้ว',
       timeEn: '2 days ago',
       iconType: 'info',
@@ -288,8 +288,8 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             {lang === 'th'
-              ? 'ประเมินหลักทรัพย์ไม้ยืนต้น 1,750 ต้น • ตรวจสอบสิทธิ์ ส.ป.ก. • สุขภาพแปลง True 5G IoT • วงเงินสินเชื่อ ธ.ก.ส.'
-              : 'Living Asset Collateral (1,750 Trees) • ALRO Land Title • True 5G IoT • BAAC Loan Approval'}
+              ? 'ประเมินหลักทรัพย์ไม้ยืนต้น 1,750 ต้น • ตรวจสอบสิทธิ์ ส.ป.ก. • สุขภาพแปลง True 5G IoT • ประมาณการวงเงินสินเชื่อ'
+              : 'Living Asset Collateral (1,750 Trees) • ALRO Land Title • True 5G IoT • Estimated Credit Limit'}
           </p>
         </div>
 
@@ -331,7 +331,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
               </span>
               <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                 {lang === 'th'
-                  ? 'ประเมินต้นมะม่วงเป็นหลักประกันสินเชื่อ ธ.ก.ส.'
+                  ? 'ประเมินต้นมะม่วงตามเกณฑ์สินเชื่อไม้ยืนต้น'
                   : 'Audited Living Asset for Bank Collateral'}
               </span>
             </div>
@@ -344,7 +344,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
             </h2>
             <p className="text-xs text-slate-600 max-w-2xl leading-relaxed font-medium">
               {lang === 'th'
-                ? 'แปลงสวนมะม่วง 70 ไร่ ผ่านการตรวจสอบ 3D Digital Twin, สิทธิ์ที่ดิน ส.ป.ก. ถูกระเบียบ 2566, เซนเซอร์ True 5G IoT ยืนยันความชื้นดิน และปลอดโรคแอนแทรคโนส พร้อมอนุมัติสินเชื่อดอกเบี้ยต่ำ'
+                ? 'แปลงสวนมะม่วง 70 ไร่ ผ่านการตรวจสอบ 3D Digital Twin, สิทธิ์ที่ดิน ส.ป.ก. ถูกระเบียบ 2566, เซนเซอร์ True 5G IoT ยืนยันความชื้นดิน และปลอดโรคแอนแทรคโนส พร้อมสำหรับนำข้อมูลไปยื่นขอสินเชื่อดอกเบี้ยพิเศษ'
                 : '70-Rai Mango orchard audited via 3D Digital Twin, compliant ALRO title, True 5G IoT telemetry, zero Anthracnose.'}
             </p>
           </div>
@@ -352,7 +352,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
             <div className="bg-amber-50/80 rounded-xl p-3 border border-amber-200 text-right">
               <span className="text-[10px] text-slate-600 block font-semibold">
-                {lang === 'th' ? 'วงเงินสินเชื่อ ธ.ก.ส. แนะนำ' : 'BAAC Pre-Approved Limit'}
+                {lang === 'th' ? 'ประมาณการวงเงินสินเชื่อ (อิงเกณฑ์ ธ.ก.ส.)' : 'Estimated Credit Limit (BAAC Criteria)'}
               </span>
               <span className="text-lg font-black text-amber-900 font-mono">
                 ฿2,500,000
@@ -367,7 +367,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
               className="px-4 py-3 bg-gradient-to-r from-emerald-700 to-emerald-600 hover:from-emerald-600 hover:to-emerald-500 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer hover:scale-[1.02] border border-amber-300/40"
             >
               <FileText className="w-4 h-4 text-amber-300" />
-              <span>{lang === 'th' ? 'เปิดใบรับรองสินทรัพย์ดิจิทัล' : 'Digital Farm Passport'}</span>
+              <span>{lang === 'th' ? 'เปิดเอกสารสรุปสินทรัพย์ดิจิทัล' : 'Digital Farm Profile'}</span>
             </button>
           </div>
         </div>
@@ -460,7 +460,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
               ฿3.88M
             </div>
               <div className="text-[11px] text-amber-700 mt-0.5 font-medium">
-                {lang === 'th' ? 'ค้ำประกัน ธ.ก.ส.' : 'BAAC Collateral'}
+                {lang === 'th' ? 'อิงเกณฑ์หลักประกันไม้ยืนต้น' : 'Collateral Basis'}
               </div>
             </div>
           </div>
@@ -855,16 +855,16 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
                     <ShieldCheck className="w-5 h-5" />
                   </span>
                   <span className="text-xs font-bold uppercase tracking-wider text-emerald-200">
-                    Official Digital Asset Passport
+                    Digital Farm Asset Profile & Summary
                   </span>
                 </div>
                 <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white">
                   {lang === 'th'
-                    ? 'ใบรับรองสินทรัพย์สวนมะม่วงดิจิทัล'
-                    : 'Digital Mango Farm Asset Passport'}
+                    ? 'เอกสารสรุปข้อมูลสินทรัพย์สวนมะม่วงดิจิทัล'
+                    : 'Digital Mango Farm Asset Profile'}
                 </h3>
                 <p className="text-xs text-emerald-100 mt-1 font-mono">
-                  Reference ID: PLOTTY-CHA-2026-0042 · ธ.ก.ส. Agri-Credit Assessment
+                  Reference ID: PLOTTY-CHA-2026-0042 · แบบจำลองประเมิน Agri-Credit (อิงเกณฑ์ พ.ร.บ.หลักประกันฯ)
                 </p>
               </div>
 
@@ -1030,14 +1030,14 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
                 </div>
               </div>
 
-              {/* Box 4: BAAC Pre-approved Loan Package */}
+              {/* Box 4: Estimated Agri-Loan Package */}
               <div className="bg-emerald-50 text-slate-900 rounded-2xl p-5 border border-emerald-300 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-800 block mb-1">
-                    BAAC Pre-Approved Agri-Loan Offer
+                    Estimated Agri-Loan Assessment (BAAC Criteria)
                   </span>
                   <h4 className="text-lg font-black text-slate-900">
-                    วงเงินสินเชื่อ ธ.ก.ส. แนะนำเพื่อการลงทุน: ฿2,500,000
+                    ประมาณการวงเงินสินเชื่อเพื่อการลงทุน (อิงเกณฑ์ ธ.ก.ส.): ฿2,500,000
                   </h4>
                   <p className="text-xs text-slate-600 mt-0.5 font-medium">
                     อัตราดอกเบี้ยพิเศษ MRR-2.25% (3.75%/ปี) ผ่อนชำระตามรอบการเก็บเกี่ยวผลผลิตมะม่วง
@@ -1058,11 +1058,16 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-slate-50 border-t border-slate-200 px-5 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <span className="text-slate-500 font-mono text-[11px]">
-                ออกโดย: แพลตฟอร์ม Plotty ร่วมกับระเบียบ ส.ป.ก. & เกณฑ์ ธ.ก.ส.
-              </span>
-              <div className="flex items-center gap-2">
+            <div className="bg-slate-50 border-t border-slate-200 px-5 sm:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div>
+                <p className="text-slate-600 font-mono text-[11px] font-semibold">
+                  จัดทำโดย: ระบบจำลองและประเมินข้อมูล Plotty (อิงเกณฑ์ พ.ร.บ.หลักประกันทางธุรกิจ 2558)
+                </p>
+                <p className="text-[10px] text-amber-700 mt-0.5">
+                  * แบบจำลองเพื่อการวางแผนเบื้องต้นของเกษตรกร มิใช่เอกสารสิทธิ์หรือการอนุมัติสินเชื่อเป็นทางการจากหน่วยงานรัฐหรือสถาบันการเงิน *
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => setShowPassportModal(false)}
                   className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded-xl transition-colors cursor-pointer"

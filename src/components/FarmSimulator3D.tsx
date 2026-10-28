@@ -37,6 +37,10 @@ import {
   Activity,
   ZoomIn,
   Target,
+  EyeOff,
+  Focus,
+  Waves,
+  Navigation,
 } from 'lucide-react';
 
 interface FarmSimulator3DProps {
@@ -147,6 +151,14 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
   const dykesGroupRef = useRef<THREE.Group | null>(null);
   const irrigationGroupRef = useRef<THREE.Group | null>(null);
   const iotNodesGroupRef = useRef<THREE.Group | null>(null);
+  const orchardLandscapeRef = useRef<THREE.Group | null>(null);
+  const waterCanalMeshesRef = useRef<THREE.Mesh[]>([]);
+  const targetCamPosRef = useRef<THREE.Vector3 | null>(null);
+  const targetCamLookAtRef = useRef<THREE.Vector3 | null>(null);
+  const [xrayIsolation, setXrayIsolation] = useState<boolean>(true);
+  const [cameraViewAngle, setCameraViewAngle] = useState<'canopy' | 'fruits' | 'trunk'>('canopy');
+  const [isAutoOrbiting, setIsAutoOrbiting] = useState<boolean>(false);
+  const isAutoOrbitingRef = useRef<boolean>(false);
 
   const crop = CROPS[selectedCrop] || CROPS.mango_namdokmai;
   const totalSqm = raiNganWaToSqm(plotAreaRai, plotAreaNgan, 0);
@@ -259,37 +271,111 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
         ctx.stroke();
       }
     } else {
-      // Default: Rayong Durian Orchard (ยกร่องลูกฟูก + สระน้ำ)
-      ctx.fillStyle = '#395333';
+      // Realistic Bang Khla Mango Orchard: Alluvial Loam Soil, Raised Beds & Parallel Irrigation Canals
+      // 1. Rich alluvial clay-loam base
+      ctx.fillStyle = '#3e2c1e';
       ctx.fillRect(0, 0, 1024, 1024);
 
-      // Farm boundary
-      ctx.strokeStyle = '#273822';
-      ctx.lineWidth = 16;
-      ctx.strokeRect(30, 30, 964, 964);
-
-      // Irrigation retention pond (สระกักเก็บน้ำ)
-      ctx.fillStyle = '#244b5c';
-      ctx.beginPath();
-      ctx.ellipse(820, 220, 120, 80, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#5e7f67';
-      ctx.lineWidth = 8;
-      ctx.stroke();
-
-      // Raised bed mounds (ร่องลูกฟูกขนานกัน)
-      ctx.strokeStyle = '#4b382a';
-      ctx.lineWidth = 18;
-      for (let x = 120; x < 900; x += 150) {
+      // Procedural fine organic soil grain & mottled humus
+      for (let i = 0; i < 400; i++) {
+        const rx = Math.random() * 1024;
+        const ry = Math.random() * 1024;
+        const rSize = 2 + Math.random() * 8;
+        ctx.fillStyle = Math.random() > 0.5 ? '#4c3726' : '#2f1f13';
         ctx.beginPath();
-        ctx.moveTo(x, 80);
-        ctx.lineTo(x, 940);
-        ctx.stroke();
+        ctx.arc(rx, ry, rSize, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      // Farm dirt road
-      ctx.fillStyle = '#9c7a53';
-      ctx.fillRect(30, 520, 964, 48);
+      // 2. Raised Earthen Planting Beds (คันดินยกร่องสวน)
+      const bedXPositions = [102, 307, 512, 717, 922];
+      bedXPositions.forEach((bx) => {
+        // Bed mound base
+        const bedGrad = ctx.createLinearGradient(bx - 60, 0, bx + 60, 0);
+        bedGrad.addColorStop(0, '#422f1f');
+        bedGrad.addColorStop(0.5, '#563e29');
+        bedGrad.addColorStop(1, '#422f1f');
+        ctx.fillStyle = bedGrad;
+        ctx.fillRect(bx - 60, 40, 120, 944);
+
+        // Ground cover grass fringes along bed shoulders
+        ctx.fillStyle = '#396024';
+        for (let y = 50; y < 980; y += 14) {
+          ctx.fillRect(bx - 62, y, 6, 8);
+          ctx.fillRect(bx + 56, y, 6, 8);
+        }
+
+        // Compost mulch rings and drip irrigation loops under 5 tree spots
+        for (let ty = 102; ty <= 922; ty += 205) {
+          // Dark moist compost mulch halo
+          ctx.fillStyle = '#26160c';
+          ctx.beginPath();
+          ctx.arc(bx, ty, 38, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Drip irrigation black PE ring
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(bx, ty, 24, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Moist soil center
+          ctx.fillStyle = '#1c1008';
+          ctx.beginPath();
+          ctx.arc(bx, ty, 10, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      // 3. Parallel Irrigation Canals (คูน้ำท้องร่องสวน 4 แนว)
+      const canalXPositions = [205, 410, 614, 819];
+      canalXPositions.forEach((cx) => {
+        // Wet muddy bank shoulders
+        ctx.fillStyle = '#2b1b11';
+        ctx.fillRect(cx - 36, 40, 72, 944);
+
+        // Vetiver grass erosion buffers along canal banks
+        ctx.fillStyle = '#2d6023';
+        ctx.fillRect(cx - 36, 40, 8, 944);
+        ctx.fillRect(cx + 28, 40, 8, 944);
+
+        // Water channel with deep river jade / emerald gradient
+        const waterGrad = ctx.createLinearGradient(cx - 26, 0, cx + 26, 0);
+        waterGrad.addColorStop(0, '#154e5b');
+        waterGrad.addColorStop(0.3, '#1c6877');
+        waterGrad.addColorStop(0.7, '#247f91');
+        waterGrad.addColorStop(1, '#154e5b');
+        ctx.fillStyle = waterGrad;
+        ctx.fillRect(cx - 26, 40, 52, 944);
+
+        // Floating water lily / duckweed clusters
+        ctx.fillStyle = '#4caf50';
+        for (let y = 80; y < 960; y += 75) {
+          const offsetX = (Math.sin(y * 0.05) * 12);
+          ctx.beginPath();
+          ctx.arc(cx + offsetX, y, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Wooden crossing bridges (สะพานไม้พาดข้ามร่องสวน)
+        [256, 512, 768].forEach((by) => {
+          ctx.fillStyle = '#654321';
+          ctx.fillRect(cx - 38, by - 6, 76, 12);
+          ctx.fillStyle = '#4a2f16';
+          ctx.fillRect(cx - 36, by - 4, 72, 3);
+          ctx.fillRect(cx - 36, by + 1, 72, 3);
+        });
+      });
+
+      // 4. Perimeter farm road & ditch
+      ctx.strokeStyle = '#273822';
+      ctx.lineWidth = 14;
+      ctx.strokeRect(30, 30, 964, 964);
+
+      // Farm dirt road path
+      ctx.fillStyle = '#6e533b';
+      ctx.fillRect(30, 502, 964, 20);
     }
 
     return canvas;
@@ -609,11 +695,14 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
       color: baseGreen,
       roughness: 0.65,
       flatShading: true,
+      transparent: true,
+      opacity: 1.0,
     });
     const canopy1 = new THREE.Mesh(canopy1Geo, canopy1Mat);
     canopy1.position.y = 2.45 * scale;
     canopy1.scale.set(1.4, 0.85, 1.4);
     canopy1.castShadow = true;
+    canopy1.userData.isCanopy = true;
     tree.add(canopy1);
 
     // Tier 2 - Mid dense dome
@@ -622,11 +711,14 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
       color: topGreen,
       roughness: 0.6,
       flatShading: true,
+      transparent: true,
+      opacity: 1.0,
     });
     const canopy2 = new THREE.Mesh(canopy2Geo, canopy2Mat);
     canopy2.position.set(0.15 * scale, 3.2 * scale, -0.1 * scale);
     canopy2.scale.set(1.2, 0.9, 1.2);
     canopy2.castShadow = true;
+    canopy2.userData.isCanopy = true;
     tree.add(canopy2);
 
     // Tier 3 - Top flush apex
@@ -635,10 +727,13 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
       color: distressed ? 0xa3913e : 0x16a34a,
       roughness: 0.55,
       flatShading: true,
+      transparent: true,
+      opacity: 1.0,
     });
     const canopy3 = new THREE.Mesh(canopy3Geo, canopy3Mat);
     canopy3.position.set(-0.1 * scale, 3.85 * scale, 0.1 * scale);
     canopy3.castShadow = true;
+    canopy3.userData.isCanopy = true;
     tree.add(canopy3);
 
     return tree;
@@ -840,6 +935,188 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     return paddy;
   };
 
+  // Realistic High-Relief 3D Central Plains Orchard Ground & Canal System (Bang Khla / Chachoengsao style)
+  // Features authentic 3D vertical elevation:
+  // - High raised planting beds (สันร่องสวน) at Y = +0.28m with rich dark compost topsoil
+  // - Steep sloped earthen ditch banks (ตลิ่งลาดเอียง) with bamboo revetment pegs (หลักไม้ไผ่ปักตลิ่ง)
+  // - Sunken water canals (คูน้ำร่องสวน) recessed deep at Y = -0.16m (0.44m physical drop!)
+  // - Deep canal floor silt at Y = -0.48m
+  const build3DOrchardLandscape = (group: THREE.Group, distressed = false) => {
+    while (group.children.length > 0) {
+      group.remove(group.children[0]);
+    }
+    waterCanalMeshesRef.current = [];
+
+    // Parallel canal X positions between tree rows (at X = -5.7, -1.9, 1.9, 5.7)
+    const canalXPositions = [-5.7, -1.9, 1.9, 5.7];
+    const canalLength = 34;
+
+    canalXPositions.forEach((cx, canalIdx) => {
+      // 1. Deep Recessed Canal Trench Bed Floor (ท้องร่องสวนขุดลึก)
+      const trenchBedGeo = new THREE.BoxGeometry(1.48, 0.26, canalLength);
+      const trenchMat = new THREE.MeshStandardMaterial({
+        color: distressed ? 0x3d3023 : 0x1f160e, // Wet anaerobic dark silt clay
+        roughness: 0.98,
+      });
+      const trench = new THREE.Mesh(trenchBedGeo, trenchMat);
+      trench.position.set(cx, -0.42, 0);
+      trench.receiveShadow = true;
+      group.add(trench);
+
+      // 2. Steep Sloped Earthen Embankment Banks (ตลิ่งร่องสวนลาดเทสองฝั่ง)
+      const bankMat = new THREE.MeshStandardMaterial({
+        color: distressed ? 0x5a4835 : 0x3b2818,
+        roughness: 0.92,
+      });
+      const bankGeo = new THREE.BoxGeometry(0.28, 0.38, canalLength);
+      
+      const leftBank = new THREE.Mesh(bankGeo, bankMat);
+      leftBank.position.set(cx - 0.72, 0.06, 0);
+      leftBank.rotation.z = 0.22; // Slopes into canal
+      leftBank.receiveShadow = true;
+      group.add(leftBank);
+
+      const rightBank = new THREE.Mesh(bankGeo, bankMat);
+      rightBank.position.set(cx + 0.72, 0.06, 0);
+      rightBank.rotation.z = -0.22; // Slopes into canal
+      rightBank.receiveShadow = true;
+      group.add(rightBank);
+
+      // 3. Bamboo Revetment Stakes (เสาหลักไม้ไผ่ปักชะลอน้ำและกันตลิ่งทรุด)
+      const bambooMat = new THREE.MeshStandardMaterial({
+        color: distressed ? 0x78716c : 0x854d0e,
+        roughness: 0.85,
+      });
+      const stakeGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.52, 6);
+      for (let z = -15; z <= 15; z += 1.8) {
+        // Left stake
+        const leftStake = new THREE.Mesh(stakeGeo, bambooMat);
+        leftStake.position.set(cx - 0.76, 0.12, z + (canalIdx % 2 ? 0.3 : 0));
+        leftStake.rotation.z = 0.08;
+        leftStake.castShadow = true;
+        group.add(leftStake);
+
+        // Right stake
+        const rightStake = new THREE.Mesh(stakeGeo, bambooMat);
+        rightStake.position.set(cx + 0.76, 0.12, z + (canalIdx % 2 ? -0.3 : 0));
+        rightStake.rotation.z = -0.08;
+        rightStake.castShadow = true;
+        group.add(rightStake);
+      }
+
+      // 4. Sunken, Realistic Glistening Orchard Water Surface (ผิวน้ำร่องสวนลึกชัดเจน)
+      // Visibly sunken at Y = -0.16m, providing 44cm of true physical 3D depth from bed top!
+      const waterGeo = new THREE.PlaneGeometry(1.36, canalLength, 1, 32);
+      const waterMat = new THREE.MeshStandardMaterial({
+        color: distressed ? 0x244c45 : 0x16697a, // Authentic deep teal canal water
+        roughness: 0.04,
+        metalness: 0.28,
+        transparent: true,
+        opacity: 0.88,
+      });
+      const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+      waterMesh.rotation.x = -Math.PI / 2;
+      waterMesh.position.set(cx, -0.16, 0);
+      waterMesh.receiveShadow = true;
+      group.add(waterMesh);
+      waterCanalMeshesRef.current.push(waterMesh);
+
+      // 5. Floating Duckweed & Water Lily Clusters (จอกแหนและใบบัวลอยบนผิวน้ำร่อง)
+      const lilyGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.015, 8);
+      const lilyMat = new THREE.MeshStandardMaterial({
+        color: distressed ? 0x737d38 : 0x2e7d32,
+        roughness: 0.55,
+      });
+      for (let z = -14; z <= 14; z += 3.6) {
+        const offsetZ = z + (canalIdx % 2 === 0 ? 0.8 : -0.8);
+        const offsetX = Math.sin(z * 1.4) * 0.34;
+        const lily = new THREE.Mesh(lilyGeo, lilyMat);
+        lily.position.set(cx + offsetX, -0.152, offsetZ);
+        group.add(lily);
+      }
+
+      // 6. Rustic Wooden Footbridges Spanning Across the Canal (สะพานไม้ข้ามร่องสวน)
+      const woodMat = new THREE.MeshStandardMaterial({
+        color: 0x5c4028,
+        roughness: 0.88,
+      });
+      const timberPostGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.48, 6);
+      [-7.5, 0, 7.5].forEach((bz) => {
+        // Wooden planks across the bed tops
+        const plank1 = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.06, 0.34), woodMat);
+        plank1.position.set(cx, 0.32, bz - 0.19);
+        plank1.castShadow = true;
+        group.add(plank1);
+
+        const plank2 = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.06, 0.34), woodMat);
+        plank2.position.set(cx, 0.32, bz + 0.19);
+        plank2.castShadow = true;
+        group.add(plank2);
+
+        // Support timber posts into ditch banks
+        [-0.7, 0.7].forEach((px) => {
+          const post = new THREE.Mesh(timberPostGeo, woodMat);
+          post.position.set(cx + px, 0.12, bz);
+          post.castShadow = true;
+          group.add(post);
+        });
+      });
+    });
+
+    // 7. High-Relief 3D Raised Planting Bed Mounds & Drip Irrigation System
+    // Raised beds along tree rows: X = [-7.6, -3.8, 0, 3.8, 7.6]
+    const rowXPositions = [-7.6, -3.8, 0, 3.8, 7.6];
+    const moundGeo = new THREE.CylinderGeometry(1.25, 1.62, 0.18, 14);
+    const moundMat = new THREE.MeshStandardMaterial({
+      color: distressed ? 0x52402e : 0x352314, // Rich organic compost topsoil
+      roughness: 0.96,
+    });
+    const dripRingGeo = new THREE.TorusGeometry(0.72, 0.024, 6, 20);
+    const dripMat = new THREE.MeshStandardMaterial({
+      color: 0x111827,
+      roughness: 0.35,
+    });
+    const emitterGeo = new THREE.CylinderGeometry(0.018, 0.028, 0.09, 6);
+    const emitterMat = new THREE.MeshStandardMaterial({
+      color: 0xd97706,
+      roughness: 0.3,
+      metalness: 0.6,
+    });
+
+    rowXPositions.forEach((rx) => {
+      // Main Raised Bed Body: Elevation Y = +0.28m, Depth down to -0.08m
+      const bedBodyGeo = new THREE.BoxGeometry(2.32, 0.36, canalLength);
+      const bedBodyMat = new THREE.MeshStandardMaterial({
+        color: distressed ? 0x4f3d2c : 0x3d2a1b,
+        roughness: 0.94,
+      });
+      const bedBody = new THREE.Mesh(bedBodyGeo, bedBodyMat);
+      bedBody.position.set(rx, 0.10, 0); // Bottom at -0.08m, Top at +0.28m
+      bedBody.receiveShadow = true;
+      group.add(bedBody);
+
+      // Tree planting mounds at Z coordinates matching planting grid (-7.6, -3.8, 0, 3.8, 7.6)
+      [-7.6, -3.8, 0, 3.8, 7.6].forEach((rz) => {
+        // Raised planting collar mound: Peak at Y = 0.46m
+        const mound = new THREE.Mesh(moundGeo, moundMat);
+        mound.position.set(rx, 0.37, rz);
+        mound.receiveShadow = true;
+        group.add(mound);
+
+        // Black PE drip irrigation ring
+        const dripRing = new THREE.Mesh(dripRingGeo, dripMat);
+        dripRing.rotation.x = -Math.PI / 2;
+        dripRing.position.set(rx, 0.465, rz);
+        group.add(dripRing);
+
+        // Micro-emitter stake
+        const emitter = new THREE.Mesh(emitterGeo, emitterMat);
+        emitter.position.set(rx + 0.72, 0.51, rz);
+        group.add(emitter);
+      });
+    });
+  };
+
   // -------------------------------------------------------------
   // Three.js Scene Setup & Lifecycle
   // -------------------------------------------------------------
@@ -864,7 +1141,7 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     const camera = new THREE.PerspectiveCamera(
       45,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
-      0.5,
+      0.1,
       200
     );
     camera.position.set(16, 18, 22);
@@ -887,7 +1164,7 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     controls.enableDamping = !isSoftwareGl;
     controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
-    controls.minDistance = 6;
+    controls.minDistance = 0.6;
     controls.maxDistance = 55;
     controlsRef.current = controls;
 
@@ -920,6 +1197,14 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     const plantGroup = new THREE.Group();
     scene.add(plantGroup);
     plantGroupRef.current = plantGroup;
+
+    // 3D Central Plains Orchard Landscape (Canal ditches, water, raised beds, mounds)
+    const orchardLandscapeGroup = new THREE.Group();
+    scene.add(orchardLandscapeGroup);
+    orchardLandscapeRef.current = orchardLandscapeGroup;
+    if (selectedCrop !== 'rice') {
+      build3DOrchardLandscape(orchardLandscapeGroup, isPlantDistressed);
+    }
 
     // 3D Flood Simulation Plane (Transparent blue water, initially sunken)
     const floodGeo = new THREE.PlaneGeometry(36.5, 36.5);
@@ -1071,10 +1356,20 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     });
     const selectionRing = new THREE.Mesh(ringGeo, ringMat);
     selectionRing.rotation.x = -Math.PI / 2;
-    selectionRing.position.y = 0.08;
+    selectionRing.position.y = 0.30;
     selectionRing.visible = false;
     scene.add(selectionRing);
     selectionRingRef.current = selectionRing;
+
+    // Instant unlock on user drag/orbit gesture so controls never fight the user
+    controls.addEventListener('start', () => {
+      targetCamPosRef.current = null;
+      targetCamLookAtRef.current = null;
+      if (isAutoOrbitingRef.current) {
+        isAutoOrbitingRef.current = false;
+        setIsAutoOrbiting(false);
+      }
+    });
 
     // Raycaster for 3D clicks / taps
     const raycaster = new THREE.Raycaster();
@@ -1083,6 +1378,13 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     let downPos = { x: 0, y: 0 };
 
     const handlePointerDown = (e: MouseEvent) => {
+      // Immediate cancellation of any pending camera lerp on user touch
+      targetCamPosRef.current = null;
+      targetCamLookAtRef.current = null;
+      if (isAutoOrbitingRef.current) {
+        isAutoOrbitingRef.current = false;
+        setIsAutoOrbiting(false);
+      }
       isDragging = false;
       downPos = { x: e.clientX, y: e.clientY };
     };
@@ -1091,6 +1393,11 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
       if (Math.abs(e.clientX - downPos.x) > 6 || Math.abs(e.clientY - downPos.y) > 6) {
         isDragging = true;
       }
+    };
+
+    const handleCancelGlide = () => {
+      targetCamPosRef.current = null;
+      targetCamLookAtRef.current = null;
     };
 
     const handlePointerUp = (e: MouseEvent) => {
@@ -1113,7 +1420,7 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
 
         if (hitObj && hitObj.userData) {
           const u = hitObj.userData;
-          setInspectedTree({
+          const treeInfo: InspectedTreeInfo = {
             id: u.id || 'TREE-01',
             row: u.row || 1,
             col: u.col || 1,
@@ -1131,11 +1438,18 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
             estimatedValueThb: u.estimatedValueThb || 1500,
             posX: hitObj.position.x,
             posZ: hitObj.position.z,
-          });
+          };
+          setInspectedTree(treeInfo);
 
-          // Move selection ring to clicked tree
+          // Position camera outside foliage in open row aisle corridor (5.2m away, framed cleanly)
+          const targetY = hitObj.position.y || (selectedCrop === 'rice' ? 0 : 0.28);
+          targetCamPosRef.current = new THREE.Vector3(hitObj.position.x + 3.8, targetY + 3.2, hitObj.position.z + 3.4);
+          targetCamLookAtRef.current = new THREE.Vector3(hitObj.position.x, targetY + 1.8, hitObj.position.z);
+          setCameraViewAngle('canopy');
+
+          // Move selection ring to clicked tree on top of raised soil mound
           if (selectionRingRef.current) {
-            selectionRingRef.current.position.set(hitObj.position.x, 0.08, hitObj.position.z);
+            selectionRingRef.current.position.set(hitObj.position.x, targetY + 0.04, hitObj.position.z);
             selectionRingRef.current.scale.set(u.canopyDiameterM * 0.42, u.canopyDiameterM * 0.42, 1);
             selectionRingRef.current.visible = true;
           }
@@ -1147,11 +1461,33 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     domElem.addEventListener('mousedown', handlePointerDown);
     domElem.addEventListener('mousemove', handlePointerMove);
     domElem.addEventListener('mouseup', handlePointerUp);
+    domElem.addEventListener('wheel', handleCancelGlide, { passive: true });
+    domElem.addEventListener('touchstart', handleCancelGlide, { passive: true });
 
     let animationFrameId: number;
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
+      
+      // Auto-Orbit controller (can be toggled or freely dragged by user)
+      controls.autoRotate = isAutoOrbitingRef.current;
+      controls.autoRotateSpeed = 1.8;
       controls.update();
+
+      // Smooth Camera & Target Lerp Glide
+      if (targetCamPosRef.current && targetCamLookAtRef.current) {
+        camera.position.lerp(targetCamPosRef.current, 0.08);
+        controls.target.lerp(targetCamLookAtRef.current, 0.08);
+        if (camera.position.distanceTo(targetCamPosRef.current) < 0.04) {
+          targetCamPosRef.current = null;
+          targetCamLookAtRef.current = null;
+        }
+      }
+
+      // Animate Realistic Sunken Canal Water Ripples & Shimmer
+      const elapsed = performance.now() * 0.0018;
+      waterCanalMeshesRef.current.forEach((wMesh, wIdx) => {
+        wMesh.position.y = -0.16 + Math.sin(elapsed * 2.5 + wIdx * 1.5) * 0.005;
+      });
 
       // Animate 5G Pulsing Wave Rings
       pulsingRings.forEach((r) => {
@@ -1184,6 +1520,8 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
       domElem.removeEventListener('mousedown', handlePointerDown);
       domElem.removeEventListener('mousemove', handlePointerMove);
       domElem.removeEventListener('mouseup', handlePointerUp);
+      domElem.removeEventListener('wheel', handleCancelGlide);
+      domElem.removeEventListener('touchstart', handleCancelGlide);
       cancelAnimationFrame(animationFrameId);
       controls.dispose();
       renderer.dispose();
@@ -1235,9 +1573,17 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     }
 
     if (selectedCrop === 'rice') {
+      if (orchardLandscapeRef.current) orchardLandscapeRef.current.visible = false;
+      if (terrainMeshRef.current) terrainMeshRef.current.position.y = 0;
       const ricePaddy = buildRicePaddy(isPlantDistressed);
       plantGroupRef.current.add(ricePaddy);
       return;
+    } else {
+      if (terrainMeshRef.current) terrainMeshRef.current.position.y = -0.54;
+      if (orchardLandscapeRef.current) {
+        orchardLandscapeRef.current.visible = true;
+        build3DOrchardLandscape(orchardLandscapeRef.current, isPlantDistressed);
+      }
     }
 
     const spacing =
@@ -1286,11 +1632,95 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
           estimatedValueThb: singleTreeValue,
         };
 
-        plantMesh.position.set(posX, 0, posZ);
+        // Plants sit atop the raised planting bed at Y = 0.28m
+        const plantElevation = selectedCrop === 'rice' ? 0 : 0.28;
+        plantMesh.position.set(posX, plantElevation, posZ);
         plantGroupRef.current.add(plantMesh);
       }
     }
   }, [selectedCrop, timelineYear, growthScale, isPlantDistressed, showFruits]);
+
+  // Intelligent Camera Focus Angle Controller for individual trees
+  // Positions camera outside foliage in row aisle corridor with complete line of sight
+  const focusOnTree = (tree: InspectedTreeInfo, angle: 'canopy' | 'fruits' | 'trunk' = 'canopy') => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    setCameraViewAngle(angle);
+
+    const bedY = selectedCrop === 'rice' ? 0 : 0.28;
+    let targetPos: THREE.Vector3;
+    let camPos: THREE.Vector3;
+
+    if (angle === 'canopy') {
+      // Step back into row aisle: 5.2m away, 50° high angle, whole tree dome framed nicely
+      targetPos = new THREE.Vector3(tree.posX, bedY + 1.8, tree.posZ);
+      camPos = new THREE.Vector3(tree.posX + 3.8, bedY + 3.2, tree.posZ + 3.4);
+    } else if (angle === 'fruits') {
+      // Step into row aisle looking directly under canopy skirt at hanging mangoes & protection bags
+      targetPos = new THREE.Vector3(tree.posX, bedY + 1.3, tree.posZ);
+      camPos = new THREE.Vector3(tree.posX + 2.4, bedY + 1.35, tree.posZ + 2.2);
+    } else {
+      // Ground collar view of root flare, soil mound, and micro-drip ring
+      targetPos = new THREE.Vector3(tree.posX, bedY + 0.35, tree.posZ);
+      camPos = new THREE.Vector3(tree.posX + 2.2, bedY + 0.85, tree.posZ + 2.0);
+    }
+
+    targetCamPosRef.current = camPos;
+    targetCamLookAtRef.current = targetPos;
+  };
+
+  const resetOverviewCamera = () => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    targetCamPosRef.current = new THREE.Vector3(16, 18, 22);
+    targetCamLookAtRef.current = new THREE.Vector3(0, 0, 0);
+  };
+
+  // Intelligent X-Ray & Foliage Opacity Controller
+  // When inspecting fruits, canopy becomes a translucent leaf veil (opacity 0.35)
+  // so leaves never block the user's view of fruits, branches, and trunk!
+  useEffect(() => {
+    if (!plantGroupRef.current) return;
+
+    plantGroupRef.current.children.forEach((treeGroup) => {
+      const isCurrent = inspectedTree && treeGroup.userData?.id === inspectedTree.id;
+      treeGroup.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          if (child.userData.origOpacity === undefined) {
+            child.userData.origOpacity = child.material.opacity ?? 1.0;
+            child.userData.origTransparent = child.material.transparent ?? false;
+          }
+
+          if (inspectedTree) {
+            if (isCurrent) {
+              if (child.userData.isCanopy && cameraViewAngle === 'fruits') {
+                // When focusing on fruits, make canopy sheer translucent veil so fruits are 100% visible
+                child.material.transparent = true;
+                child.material.opacity = 0.35;
+                child.material.depthWrite = false;
+              } else {
+                child.material.transparent = child.userData.origTransparent;
+                child.material.opacity = 1.0;
+                child.material.depthWrite = true;
+              }
+            } else if (xrayIsolation) {
+              // Non-selected neighbor trees ghosted to 15% opacity
+              child.material.transparent = true;
+              child.material.opacity = 0.15;
+              child.material.depthWrite = false;
+            } else {
+              child.material.transparent = child.userData.origTransparent;
+              child.material.opacity = child.userData.origOpacity;
+              child.material.depthWrite = true;
+            }
+          } else {
+            child.material.transparent = child.userData.origTransparent;
+            child.material.opacity = child.userData.origOpacity;
+            child.material.depthWrite = true;
+          }
+          child.material.needsUpdate = true;
+        }
+      });
+    });
+  }, [inspectedTree, xrayIsolation, cameraViewAngle]);
 
   const handleBoundaryConfirmed = (plotData: {
     areaRai: number;
@@ -1797,7 +2227,7 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
           <div className="pt-1.5 border-t border-amber-200/80">
             <div className="bg-amber-100/90 text-amber-950 text-[10px] sm:text-[10.5px] font-bold px-2 py-1 rounded-lg flex items-center gap-1.5 border border-amber-300/80">
               <Target className="w-3.5 h-3.5 text-amber-800 shrink-0" />
-              <span>{lang === 'th' ? 'แตะ/คลิกต้นไม้ 3D เพื่อดูข้อมูลรายต้น' : 'Click any 3D Tree to Inspect'}</span>
+              <span>{lang === 'th' ? 'คลิกต้นไม้ 3D เพื่อเจาะลึก • มีระบบพรางต้นรอบข้าง (X-Ray)' : 'Click any Tree • Auto X-Ray Focus'}</span>
             </div>
           </div>
         </div>
@@ -1899,6 +2329,22 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
             >
               <Maximize2 className="w-3 h-3 text-sky-600" />
               <span>{lang === 'th' ? '45°' : '45°'}</span>
+            </button>
+            <button
+              onClick={() => {
+                const next = !isAutoOrbiting;
+                setIsAutoOrbiting(next);
+                isAutoOrbitingRef.current = next;
+              }}
+              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg transition-colors font-bold flex items-center gap-1 cursor-pointer ${
+                isAutoOrbiting
+                  ? 'bg-amber-400 text-slate-950 shadow-2xs'
+                  : 'text-slate-700 hover:bg-slate-100'
+              }`}
+              title={lang === 'th' ? 'หมุนชม 360° อัตโนมัติ' : 'Auto 360° orbit'}
+            >
+              <RotateCcw className={`w-3 h-3 ${isAutoOrbiting ? 'animate-spin text-slate-900' : 'text-amber-600'}`} />
+              <span>{lang === 'th' ? 'หมุน 360°' : '360°'}</span>
             </button>
           </div>
         </div>
@@ -2077,7 +2523,7 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
                   ฿{inspectedTree.estimatedValueThb.toLocaleString()}
                 </span>
                 <span className="text-[9.5px] text-slate-500 block font-sans">
-                  ธ.ก.ส. รับรอง
+                  อิงเกณฑ์ พ.ร.บ.หลักประกันฯ
                 </span>
               </div>
             </div>
@@ -2114,47 +2560,116 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
               </div>
             </div>
 
-            {/* Interactive Actions for this tree */}
-            <div className="flex items-center gap-1.5 pt-1">
-              <button
-                onClick={() => {
-                  if (cameraRef.current && controlsRef.current) {
-                    controlsRef.current.target.set(inspectedTree.posX, 1.5, inspectedTree.posZ);
-                    cameraRef.current.position.set(
-                      inspectedTree.posX + 4,
-                      3.5,
-                      inspectedTree.posZ + 5
-                    );
-                    controlsRef.current.update();
-                  }
-                }}
-                className="flex-1 py-1.5 px-2 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1 shadow-2xs border border-amber-400/80 cursor-pointer"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-                <span>{lang === 'th' ? 'ซูมเจาะจงต้นนี้' : 'Focus Tree'}</span>
-              </button>
+            {/* View Perspectives & Unobstructed Inspection Modes */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between text-[10px] text-slate-500 font-sans">
+                <span className="font-semibold">{lang === 'th' ? 'มุมมองเจาะลึก (ไม่ถูกต้นอื่นบัง):' : 'Unobstructed View Angle:'}</span>
+                <button
+                  onClick={() => setXrayIsolation(!xrayIsolation)}
+                  className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                    xrayIsolation
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                  title={lang === 'th' ? 'เปิด/ปิดการพรางต้นรอบข้างเพื่อมองทะลุต้นด้านใน' : 'Toggle X-Ray ghosting on neighbor trees'}
+                >
+                  <EyeOff className="w-3 h-3 text-amber-700" />
+                  <span>{lang === 'th' ? (xrayIsolation ? 'X-Ray เปิดอยู่' : 'เปิด X-Ray') : 'X-Ray'}</span>
+                </button>
+              </div>
 
-              <button
-                onClick={() => {
-                  // Trigger mini pulse animation
-                  if (selectionRingRef.current) {
-                    selectionRingRef.current.scale.set(3, 3, 1);
-                    setTimeout(() => {
-                      if (selectionRingRef.current) {
-                        selectionRingRef.current.scale.set(
-                          inspectedTree.canopyDiameterM * 0.42,
-                          inspectedTree.canopyDiameterM * 0.42,
-                          1
-                        );
-                      }
-                    }, 250);
-                  }
-                }}
-                className="py-1.5 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-lg text-xs flex items-center gap-1 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>{lang === 'th' ? 'ตรวจซ้ำ' : 'Audit'}</span>
-              </button>
+              {/* 3 Dedicated View Modes */}
+              <div className="grid grid-cols-3 gap-1">
+                <button
+                  onClick={() => focusOnTree(inspectedTree, 'canopy')}
+                  className={`py-1.5 px-1 rounded-lg text-[10.5px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer border ${
+                    cameraViewAngle === 'canopy'
+                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80'
+                  }`}
+                >
+                  <Navigation className="w-3 h-3" />
+                  <span>{lang === 'th' ? 'ทรงพุ่ม 55°' : 'Canopy 55°'}</span>
+                </button>
+
+                <button
+                  onClick={() => focusOnTree(inspectedTree, 'fruits')}
+                  className={`py-1.5 px-1 rounded-lg text-[10.5px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer border ${
+                    cameraViewAngle === 'fruits'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80'
+                  }`}
+                >
+                  <Focus className="w-3 h-3" />
+                  <span>{lang === 'th' ? 'ช่อผล & ถุงห่อ' : 'Fruit Bags'}</span>
+                </button>
+
+                <button
+                  onClick={() => focusOnTree(inspectedTree, 'trunk')}
+                  className={`py-1.5 px-1 rounded-lg text-[10.5px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer border ${
+                    cameraViewAngle === 'trunk'
+                      ? 'bg-teal-700 text-white border-teal-600 shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80'
+                  }`}
+                >
+                  <Waves className="w-3 h-3" />
+                  <span>{lang === 'th' ? 'โคนต้น & ดิน' : 'Trunk/Soil'}</span>
+                </button>
+              </div>
+
+              {/* Bottom helper row: Reset overview, 360 Orbit & Audit */}
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <button
+                  onClick={resetOverviewCamera}
+                  className="flex-1 py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-[10.5px] flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3 h-3 text-slate-500" />
+                  <span>{lang === 'th' ? 'ภาพรวม' : 'Reset View'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    const next = !isAutoOrbiting;
+                    setIsAutoOrbiting(next);
+                    isAutoOrbitingRef.current = next;
+                  }}
+                  className={`py-1.5 px-2 font-bold rounded-lg text-[10.5px] flex items-center justify-center gap-1 transition-colors cursor-pointer border ${
+                    isAutoOrbiting
+                      ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80'
+                  }`}
+                  title={lang === 'th' ? 'หมุนชมต้นนี้รอบทิศ 360°' : 'Auto 360° orbit'}
+                >
+                  <RotateCcw className={`w-3 h-3 ${isAutoOrbiting ? 'animate-spin text-slate-950' : 'text-slate-500'}`} />
+                  <span>{lang === 'th' ? (isAutoOrbiting ? 'กำลังหมุน' : 'หมุน 360°') : '360°'}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (selectionRingRef.current) {
+                      selectionRingRef.current.scale.set(3, 3, 1);
+                      setTimeout(() => {
+                        if (selectionRingRef.current) {
+                          selectionRingRef.current.scale.set(
+                            inspectedTree.canopyDiameterM * 0.42,
+                            inspectedTree.canopyDiameterM * 0.42,
+                            1
+                          );
+                        }
+                      }, 250);
+                    }
+                  }}
+                  className="py-1.5 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-lg text-[10.5px] flex items-center gap-1 cursor-pointer"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-500" />
+                  <span>{lang === 'th' ? 'ตรวจซ้ำ' : 'Audit'}</span>
+                </button>
+              </div>
+
+              {/* Free Camera Movement Hint */}
+              <div className="text-[9.5px] text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200/70 font-sans text-center">
+                {lang === 'th' ? '🖱️ คลิกเมาส์ซ้ายลากหมุน • ขวาลากแพน • สกอลล์ซูมเข้าออกได้อย่างอิสระ' : '🖱️ Left-drag to orbit • Right-drag to pan • Scroll to zoom'}
+              </div>
             </div>
           </div>
         )}

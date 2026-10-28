@@ -40,14 +40,14 @@ export const PitchDemoModal: React.FC<PitchDemoModalProps> = ({
   const steps = [
     {
       id: 'step-1',
-      titleTh: '1. แดชบอร์ดสินทรัพย์สวนทุเรียน 70 ไร่ & คะแนน Agri-Credit',
-      titleEn: '1. 70-Rai Durian Asset Dashboard & Agri-Credit',
+      titleTh: '1. แดชบอร์ดสินทรัพย์สวนมะม่วง 70 ไร่ & คะแนน Agri-Credit',
+      titleEn: '1. 70-Rai Mango Asset Dashboard & Agri-Credit',
       tab: 'home',
       descTh:
-        'ประมวลผลข้อมูลสวนทุเรียน 1,750 ต้น (อ.บางกรวย จ.นนทบุรี) คำนวณคะแนนสินเชื่อเกษตรกร 94/100 (เกรด A+) พร้อมประเมินวงเงินกู้ ธ.ก.ส. ฿2.5M และผลผลิต 101.3 ตัน',
+        'ประมวลผลข้อมูลสวนมะม่วง 1,750 ต้น (อ.บางคล้า จ.ฉะเชิงเทรา) คำนวณคะแนนประเมินเกษตรกร 94/100 (เกรด A+) พร้อมประมาณการวงเงินสินเชื่อ ฿2.5M และผลผลิต 101.3 ตัน',
       descEn:
-        'Unified 70-rai durian orchard tracking 1,750 trees, Agri-Credit Rating 94/100 (Grade A+), and ฿2.5M pre-approved BAAC loan package.',
-      badgeTh: 'True Hackathon Highlight',
+        'Unified 70-rai mango orchard tracking 1,750 trees, Agri-Credit Rating 94/100 (Grade A+), and ฿2.5M estimated credit package.',
+      badgeTh: 'Hackathon Highlight',
       badgeColor: 'bg-emerald-100 text-emerald-800',
     },
     {
@@ -56,9 +56,9 @@ export const PitchDemoModal: React.FC<PitchDemoModalProps> = ({
       titleEn: '2. 3D Digital Twin Remote Asset Audit & True 5G IoT',
       tab: 'simulator',
       descTh:
-        'แปลงภาพสวนเป็นโมเดล 3D ตรวจนับลูกทุเรียนบนกิ่งจริงสำหรับสัญญาซื้อขายล่วงหน้า พร้อมสถานีเซนเซอร์วัดดิน/อากาศ True 5G IoT และ Heatmap ดาวเทียม NDVI',
+        'แปลงภาพสวนเป็นโมเดล 3D ตรวจนับผลมะม่วงน้ำดอกไม้และถุงห่อคาร์บอนบนกิ่งจริง พร้อมสถานีเซนเซอร์วัดดิน/อากาศ True 5G IoT และ Heatmap ดาวเทียม NDVI',
       descEn:
-        'Converts land photos into realistic 3D Digital Twin with fruit-on-branch counting for export contracts and True 5G IoT sensor pole telemetry.',
+        'Converts land photos into realistic 3D Digital Twin with mango fruit & bagging inspection and True 5G IoT sensor pole telemetry.',
       badgeTh: 'Deep Tech & 5G Ecosystem',
       badgeColor: 'bg-rose-100 text-rose-800',
     },
@@ -68,21 +68,21 @@ export const PitchDemoModal: React.FC<PitchDemoModalProps> = ({
       titleEn: '3. AI Satellite NDVI/NDWI Health & Water Heatmap',
       tab: 'simulator',
       descTh:
-        'วิเคราะห์ความสมบูรณ์ของใบและความชื้นดินระดับดาวเทียม แสดงผลเป็น Heatmap สีช่วยระบุจุดเสี่ยงโรครากเน่าโคนเน่าก่อนลุกลามทั่วสวน',
+        'วิเคราะห์ความสมบูรณ์ของใบและความชื้นดินระดับดาวเทียม แสดงผลเป็น Heatmap สีช่วยระบุจุดเสี่ยงโรคแอนแทรคโนสก่อนลุกลามทั่วสวน',
       descEn:
-        'Satellite-grade spatial heatmaps tracking chlorophyll density (NDVI) and soil moisture (NDWI) for early Phytophthora risk detection.',
+        'Satellite-grade spatial heatmaps tracking chlorophyll density (NDVI) and soil moisture (NDWI) for early Anthracnose risk detection.',
       badgeTh: 'Spatial AI Analytics',
       badgeColor: 'bg-teal-100 text-teal-800',
     },
     {
       id: 'step-4',
-      titleTh: '4. พยากรณ์ราคาทุเรียนส่งออก 12 เดือน & จังหวะตัดขายล่วงหน้า',
-      titleEn: '4. 12-Month Durian Export Price Forecast & Pre-Harvest Selling',
+      titleTh: '4. พยากรณ์ราคามะม่วงส่งออก 12 เดือน & จังหวะขายล่วงหน้า',
+      titleEn: '4. 12-Month Mango Export Price Forecast & Pre-Harvest Selling',
       tab: 'forecast',
       descTh:
-        'กราฟพยากรณ์ราคาทุเรียนหมอนทองและก้านยาวล่วงหน้า 12 เดือน ด้วยโมเดล Monte Carlo พร้อมกรอบความเชื่อมั่น 80% แนะนำช่วงเวลาตัดขายล่วงหน้า (Pre-harvest) ให้ล้งจีน',
+        'กราฟพยากรณ์ราคามะม่วงน้ำดอกไม้สีทองล่วงหน้า 12 เดือน ด้วยโมเดล Monte Carlo พร้อมกรอบความเชื่อมั่น 80% แนะนำช่วงเวลาทำสัญญาซื้อขายล่วงหน้า (Pre-harvest) ตลาดส่งออก',
       descEn:
-        '12-month export durian price forecast curves with 80% confidence corridors and AI commentary on seasonal harvest pricing.',
+        '12-month export mango price forecast curves with 80% confidence corridors and commentary on seasonal harvest pricing.',
       badgeTh: 'Market Intelligence',
       badgeColor: 'bg-blue-100 text-blue-800',
     },
@@ -92,10 +92,10 @@ export const PitchDemoModal: React.FC<PitchDemoModalProps> = ({
       titleEn: '5. ฿3.88M Living Tree Collateral, ALRO Rights & T-VER Credits',
       tab: 'advisor',
       descTh:
-        'ประเมินมูลค่าต้นทุเรียนเป็นหลักประกันเงินกู้ตาม พ.ร.บ.หลักประกันทางธุรกิจ รับรองสิทธิที่ดิน ส.ป.ก. 4-01 และคำนวณคาร์บอนเครดิต T-VER ฿121,200/ปี ตอบโจทย์ความยั่งยืนทางการเงิน',
+        'ประเมินมูลค่าต้นมะม่วงเป็นหลักประกันตาม พ.ร.บ.หลักประกันทางธุรกิจ ตรวจสอบระเบียบที่ดิน ส.ป.ก. 4-01 และคำนวณคาร์บอนเครดิต T-VER ฿121,200/ปี ตอบโจทย์ความยั่งยืนทางการเงิน',
       descEn:
-        'Living tree collateral appraisal under Business Collateral Act, ALRO title rights verification, and T-VER carbon credit offsets.',
-      badgeTh: 'ESG & Social Impact',
+        'Living tree collateral appraisal under Business Collateral Act, ALRO title compliance verification, and T-VER carbon credit offsets.',
+      badgeTh: 'ESG & Sustainability',
       badgeColor: 'bg-amber-100 text-amber-800',
     },
   ];

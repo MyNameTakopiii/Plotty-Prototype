@@ -146,14 +146,15 @@ export default function App() {
               <span>{lang === 'th' ? 'แพลตฟอร์มเกษตรแม่นยำสำหรับชาวไร่ยุคใหม่' : 'Next-Gen Farming for Modern Growers'}</span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-slate-500 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2 text-slate-500 text-[11px]">
+              <span className="text-slate-400">{lang === 'th' ? 'อ้างอิงข้อมูลระเบียบวิชาการ:' : 'Referenced Standards:'}</span>
               <span>{lang === 'th' ? 'กรมวิชาการเกษตร' : 'DOA'}</span>
               <span>·</span>
               <span>{lang === 'th' ? 'กรมการค้าภายใน' : 'DIT'}</span>
               <span>·</span>
-              <span>{lang === 'th' ? 'สำนักงานการปฏิรูปที่ดินเพื่อเกษตรกรรม (ส.ป.ก.)' : 'ALRO'}</span>
+              <span>{lang === 'th' ? 'ระเบียบ ส.ป.ก.' : 'ALRO'}</span>
               <span>·</span>
-              <span>{lang === 'th' ? 'ธ.ก.ส.' : 'BAAC'}</span>
+              <span>{lang === 'th' ? 'แนวทาง ธ.ก.ส.' : 'BAAC Guidelines'}</span>
             </div>
           </div>
         </footer>

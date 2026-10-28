@@ -59,12 +59,12 @@ export const HappyPathPlayer: React.FC<HappyPathPlayerProps> = ({
       sectionLabelTh: 'ปุ่มสำคัญ: ตรวจรับรองคะแนนสินเชื่อ & เปิดหนังสือรับรองดิจิทัล',
       sectionLabelEn: 'Key Feature: Agri-Credit Score & Digital Asset Passport',
       targetSelector: '#tour-step-1',
-      actionLabelTh: 'กดเพื่อเปิดใบรับรองสินทรัพย์ดิจิทัล (ลองกดดูเอง)',
-      actionLabelEn: 'Click to Open Digital Asset Passport',
+      actionLabelTh: 'กดเพื่อเปิดเอกสารสรุปสินทรัพย์ดิจิทัล (ลองกดดูเอง)',
+      actionLabelEn: 'Click to Open Digital Farm Asset Profile',
       pitchHighlightTh:
-        'ประมวลผลข้อมูลสวนมะม่วง 4 แปลง 70 ไร่ (1,750 ต้น) ใน อ.บางคล้า จ.ฉะเชิงเทรา คำนวณคะแนนสินเชื่อ Agri-Credit 94/100 (เกรด A+) ปลดล็อกวงเงินสินเชื่อ ธ.ก.ส. ฿2.5M และประเมินผลผลิต 101.3 ตัน',
+        'ประมวลผลข้อมูลสวนมะม่วง 4 แปลง 70 ไร่ (1,750 ต้น) ใน อ.บางคล้า จ.ฉะเชิงเทรา คำนวณคะแนนประเมิน Agri-Credit 94/100 (เกรด A+) พร้อมประมาณการวงเงินสินเชื่อ ฿2.5M และประเมินผลผลิต 101.3 ตัน',
       pitchHighlightEn:
-        '70-rai Mango orchard overview with 1,750 trees, Agri-Credit Rating 94/100 (Grade A+), unlocking ฿2.5M BAAC credit line.',
+        '70-rai Mango orchard overview with 1,750 trees, Agri-Credit Rating 94/100 (Grade A+), estimated ฿2.5M credit assessment.',
       actionType: 'open_passport',
     },
     {
