@@ -1197,8 +1197,8 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     const isPlotA = initialPlot?.plotId === 'plot_a' || plotAreaRai >= 70;
     const isPlotB = initialPlot?.plotId === 'plot_b' || (plotAreaRai >= 20 && plotAreaRai < 70);
 
-    const countX = selectedCrop === 'cassava' ? 7 : isPlotA ? 8 : isPlotB ? 5 : 3;
-    const countZ = selectedCrop === 'cassava' ? 7 : isPlotA ? 8 : isPlotB ? 5 : 3;
+    const countX = selectedCrop === 'cassava' ? 5 : isPlotA ? 5 : isPlotB ? 4 : 3;
+    const countZ = selectedCrop === 'cassava' ? 5 : isPlotA ? 5 : isPlotB ? 4 : 3;
 
     const spacing =
       selectedCrop === 'oilpalm' ? 4.8 :
@@ -2004,15 +2004,9 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
                   <div>{sqmToString(totalSqm, lang)}</div>
                   <div className="truncate">{lang === 'th' ? 'ภาพฐาน:' : 'Base 2D:'} {uploadedImageName}</div>
                   <div>{lang === 'th' ? 'จำนวนต้น:' : 'Trees:'} {totalTrees.toLocaleString()} {lang === 'th' ? 'ต้น' : 'trees'}</div>
-                  <div className="pt-1 border-t border-slate-100 text-emerald-700 font-semibold text-[11px] flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span className="truncate">
-                      {selectedCrop.includes('mango')
-                        ? timelineYear >= 3
-                          ? `ผลมะม่วงส่งออก: ~${timelineYear >= 10 ? 120 : timelineYear >= 5 ? 65 : 25} ลูก/ต้น`
-                          : 'ระยะสะสมตาดอกและทรงพุ่ม'
-                        : 'ผลผลิตสมบูรณ์'}
-                    </span>
+                  <div className="pt-1.5 mt-1 border-t border-slate-100 text-amber-900 bg-amber-50 px-2 py-1 rounded-lg font-bold text-[11px] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>คลิกที่ "ต้นไม้" เพื่อดูรายละเอียด</span>
                   </div>
                 </div>
               </div>
