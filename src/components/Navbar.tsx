@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Sprout, Globe, MapPin } from 'lucide-react';
+import { MangoIcon } from './MangoIcon';
 
 interface NavbarProps {
   currentTab: string;
@@ -51,8 +52,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           
           {/* Zone 1: Brand Wordmark */}
           <div className="flex items-center gap-3 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-sm">
-              <Sprout className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-emerald-600 flex items-center justify-center text-white shadow-sm shrink-0">
+              <MangoIcon className="w-5 h-5 text-white" />
             </div>
             <div className="leading-tight">
               <div className="flex items-center gap-1.5">

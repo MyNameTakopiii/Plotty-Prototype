@@ -18,7 +18,9 @@ import {
   X,
   ChevronRight,
   ShieldCheck,
+  Bot,
 } from 'lucide-react';
+import { MangoIcon } from './MangoIcon';
 
 interface SidebarProps {
   currentTab: string;
@@ -55,11 +57,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const menuItems = [
     {
       id: 'home',
-      icon: LayoutDashboard,
-      labelTh: 'แดชบอร์ด & AI เกษตร',
-      labelEn: 'Dashboard & AI Assistant',
-      badgeTh: 'ผู้ช่วย AI',
-      badgeEn: 'AI Assistant',
+      icon: Bot,
+      labelTh: 'Plotty AI (ถาม-ตอบ & ฟีเจอร์)',
+      labelEn: 'Plotty AI Assistant',
+      badgeTh: 'ChatGPT-Style',
+      badgeEn: 'ChatGPT-Style',
       badgeColor: 'bg-emerald-100 text-emerald-800',
     },
     {
@@ -83,23 +85,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Mobile Backdrop */}
       {isOpenMobile && (
         <div
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden"
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 md:hidden"
           onClick={() => setIsOpenMobile(false)}
         />
       )}
 
-      {/* Sidebar Container */}
+      {/* Persistent Desktop Sidebar & Mobile Drawer (Gemini Style) */}
       <aside
-        className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white border-r border-slate-200 z-50 flex flex-col transition-transform duration-200 ease-in-out ${
+        className={`fixed md:static top-0 left-0 h-screen md:h-full w-72 bg-white border-r border-slate-200 z-50 md:z-10 flex flex-col shrink-0 shadow-2xl md:shadow-none transition-transform duration-200 ease-in-out ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
         {/* Brand Header */}
-        <div className="p-5 border-b border-amber-100/60 bg-gradient-to-r from-amber-50/40 via-white to-emerald-50/30 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-amber-100/60 bg-gradient-to-r from-amber-50/40 via-white to-emerald-50/30 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-emerald-600 flex items-center justify-center text-white shadow-md shadow-amber-500/25 ring-2 ring-amber-200">
-              <Sprout className="w-6 h-6 text-white drop-shadow-xs" />
-            </div>
+            <MangoIcon className="w-10 h-10 object-cover rounded-xl shadow-md shrink-0 ring-2 ring-amber-200" />
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-slate-900 tracking-tight text-lg">
@@ -115,10 +115,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          {/* Close Button on Mobile */}
+          {/* Close Button for mobile */}
           <button
             onClick={() => setIsOpenMobile(false)}
-            className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer transition-colors md:hidden"
             aria-label="Close menu"
           >
             <X className="w-5 h-5" />

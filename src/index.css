@@ -1,61 +1,7 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: 'Noto Sans Thai', 'Sarabun', 'IBM Plex Sans Thai', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  
-  /* Signature Thai Mango Palette: White + Mango Leaf Green + Ripe Golden Mango Yellow */
-  --color-mango-50: #fefce8;
-  --color-mango-100: #fef9c3;
-  --color-mango-200: #fef08a;
-  --color-mango-300: #fde047;
-  --color-mango-400: #facc15;
-  --color-mango-500: #eab308;
-  --color-mango-600: #ca8a04;
-  --color-mango-700: #a16207;
-  --color-mango-800: #854d0e;
-  --color-mango-900: #713f12;
-
-  --color-mangoleaf-50: #f0fdf4;
-  --color-mangoleaf-100: #dcfce7;
-  --color-mangoleaf-500: #22c55e;
-  --color-mangoleaf-600: #16a34a;
-  --color-mangoleaf-700: #15803d;
-  --color-mangoleaf-800: #166534;
-  --color-mangoleaf-900: #14532d;
-}
-
 @layer base {
-  *, ::before, ::after {
-    font-family: var(--font-sans);
+  body {
+    font-family: 'Sarabun', sans-serif;
   }
-
-  html, body {
-    font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    font-size: 15px;
-    line-height: 1.6;
-    background-color: #fbfbf7; /* Warm creamy white background like peeled mango flesh & white paper */
-    color: #1e293b;
-  }
-
-  button, input, select, textarea {
-    font-family: inherit;
-  }
-}
-
-/* Custom scrollbars with mango theme */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #fde047;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #eab308;
 }

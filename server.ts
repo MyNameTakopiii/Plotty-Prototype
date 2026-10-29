@@ -329,7 +329,7 @@ async function startServer() {
   } else {
     // Production: serve built static files from dist
     app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (_req, res) => {
+    app.use((_req, res) => {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   }

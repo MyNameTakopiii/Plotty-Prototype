@@ -1,6 +1,5 @@
 {
-  "name": "Plotty - Mango Agri-Credit & Digital Twin OS",
-  "description": "Precision vertical Agri-Tech and Agri-Credit platform focused exclusively on Mango orchards, 3D Digital Twin, living asset collateral, and satellite mapping.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "Plotty AI — ผู้ช่วยสวนมะม่วง & ประเมินสินเชื่อดิจิทัล 3D",
+  "description": "แพลตฟอร์มผู้ช่วย AI จัดการสวนมะม่วง พยากรณ์ราคา ประเมินสินเชื่อ ธ.ก.ส. สิทธิ์ ส.ป.ก. และ 3D Digital Twin",
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

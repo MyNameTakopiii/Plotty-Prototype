@@ -17,6 +17,7 @@ import {
   ChevronUp,
   RotateCcw,
   Maximize2,
+  Minimize2,
   Calendar,
   Compass,
   Droplets,
@@ -36,11 +37,15 @@ import {
   HeartPulse,
   Activity,
   ZoomIn,
+  ZoomOut,
   Target,
   EyeOff,
   Focus,
   Waves,
   Navigation,
+  Smartphone,
+  Sprout,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export interface Plot3DInfo {
@@ -83,6 +88,34 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
   const [riskScenario, setRiskScenario] = useState<'normal' | 'flood' | 'drought'>('normal');
   const [hasFloodDefense, setHasFloodDefense] = useState<boolean>(false);
   const [hasDroughtDefense, setHasDroughtDefense] = useState<boolean>(false);
+
+  // Mobile Ergonomic View & Fullscreen State
+  const [isFullscreen3D, setIsFullscreen3D] = useState<boolean>(false);
+  const [activeMobileStep, setActiveMobileStep] = useState<'3d_viewer' | 'upload_2d' | 'select_crop' | 'disaster'>('3d_viewer');
+  const [showMobileSpecBadge, setShowMobileSpecBadge] = useState<boolean>(false);
+  const [showMobileQuickTools, setShowMobileQuickTools] = useState<boolean>(false);
+
+  const handleZoomIn = () => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    const target = controlsRef.current.target;
+    const cam = cameraRef.current;
+    const dir = new THREE.Vector3().subVectors(target, cam.position);
+    if (dir.length() > 1.2) {
+      cam.position.addScaledVector(dir, 0.25);
+      controlsRef.current.update();
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    const target = controlsRef.current.target;
+    const cam = cameraRef.current;
+    const dir = new THREE.Vector3().subVectors(cam.position, target);
+    if (dir.length() < 48) {
+      cam.position.addScaledVector(dir.normalize(), 3.5);
+      controlsRef.current.update();
+    }
+  };
 
   // 3D Tree Selection & Interactive Inspection State
   interface InspectedTreeInfo {
@@ -134,9 +167,14 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
       if (initialPlot.treeAgeYears !== undefined) {
         setTimelineYear(initialPlot.treeAgeYears >= 8 ? 10 : initialPlot.treeAgeYears >= 5 ? 5 : 1);
       }
+      if (initialPlot.name) {
+        setUploadedImageName(`ภาพถ่ายแปลง: ${initialPlot.name}`);
+      }
       if (initialPlot.plotId === 'plot_c') {
         setSelected5GNode('node-1');
       }
+      setHasSimulated(true);
+      setActiveMobileStep('3d_viewer');
     }
   }, [initialPlot]);
   
@@ -157,17 +195,6 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
       setTimeout(() => setCopied3DLink(false), 3000);
     }
   };
-
-  // Sync when initialPlot changes from Farm Dashboard
-  useEffect(() => {
-    if (initialPlot) {
-      setSelectedCrop(initialPlot.cropId);
-      setPendingCrop(initialPlot.cropId);
-      setPlotAreaRai(initialPlot.areaRai);
-      setUploadedImageName(`ภาพถ่ายแปลง: ${initialPlot.name}`);
-      setHasSimulated(true);
-    }
-  }, [initialPlot]);
 
   // Three.js internal refs
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -1146,30 +1173,99 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     });
   };
 
+  // Reusable Tree & Orchard Population Engine (called synchronously in setup and on state updates)
+  const populateTreesInGroup = (group: THREE.Group) => {
+    while (group.children.length > 0) {
+      const child = group.children[0];
+      group.remove(child);
+    }
+
+    if (selectedCrop === 'rice') {
+      if (orchardLandscapeRef.current) orchardLandscapeRef.current.visible = false;
+      if (terrainMeshRef.current) terrainMeshRef.current.position.y = 0;
+      const ricePaddy = buildRicePaddy(isPlantDistressed);
+      group.add(ricePaddy);
+      return;
+    } else {
+      if (terrainMeshRef.current) terrainMeshRef.current.position.y = -0.54;
+      if (orchardLandscapeRef.current) {
+        orchardLandscapeRef.current.visible = true;
+        build3DOrchardLandscape(orchardLandscapeRef.current, isPlantDistressed);
+      }
+    }
+
+    const isPlotA = initialPlot?.plotId === 'plot_a' || plotAreaRai >= 70;
+    const isPlotB = initialPlot?.plotId === 'plot_b' || (plotAreaRai >= 20 && plotAreaRai < 70);
+
+    const countX = selectedCrop === 'cassava' ? 7 : isPlotA ? 8 : isPlotB ? 5 : 3;
+    const countZ = selectedCrop === 'cassava' ? 7 : isPlotA ? 8 : isPlotB ? 5 : 3;
+
+    const spacing =
+      selectedCrop === 'oilpalm' ? 4.8 :
+      selectedCrop === 'rubber' ? 3.6 :
+      isPlotA ? 3.2 : isPlotB ? 3.8 : 4.4;
+
+    for (let ix = -Math.floor(countX / 2); ix <= Math.floor(countX / 2); ix++) {
+      for (let iz = -Math.floor(countZ / 2); iz <= Math.floor(countZ / 2); iz++) {
+        const posX = ix * spacing + (Math.random() - 0.5) * 0.2;
+        const posZ = iz * spacing + (Math.random() - 0.5) * 0.2;
+
+        let plantMesh: THREE.Group;
+        if (selectedCrop === 'rubber') plantMesh = buildRubberTree(growthScale, isPlantDistressed);
+        else if (selectedCrop === 'oilpalm') plantMesh = buildOilPalmTree(growthScale, isPlantDistressed);
+        else if (selectedCrop === 'cassava') plantMesh = buildCassavaBush(growthScale, isPlantDistressed);
+        else plantMesh = buildMangoTree(growthScale, isPlantDistressed, selectedCrop);
+
+        const treeIndex = (ix + Math.floor(countX / 2)) * countZ + (iz + Math.floor(countZ / 2)) + 1;
+        const varietyInfo = CROPS[selectedCrop] || CROPS.mango_namdokmai;
+        const baseFruit = timelineYear >= 10 ? 120 : timelineYear >= 5 ? 65 : timelineYear >= 3 ? 25 : 0;
+        const fruitVariance = Math.round((Math.random() - 0.5) * 12);
+        const actualFruits = Math.max(0, baseFruit + fruitVariance);
+        const treeAge = timelineYear === 0 ? 0.5 : timelineYear === 1 ? 1.5 : timelineYear === 3 ? 3.5 : timelineYear === 5 ? 6 : 10;
+        const singleTreeValue = timelineYear >= 5 ? 1500 : timelineYear >= 3 ? 1000 : 500;
+
+        plantMesh.userData = {
+          id: `MNG-ROW${ix + Math.floor(countX / 2) + 1}-T${iz + Math.floor(countZ / 2) + 1}`,
+          row: ix + Math.floor(countX / 2) + 1,
+          col: iz + Math.floor(countZ / 2) + 1,
+          varietyTh: varietyInfo.nameThai.split('(')[0],
+          varietyEn: varietyInfo.nameEnglish.split('(')[0],
+          varietyId: selectedCrop,
+          ageYears: treeAge,
+          canopyDiameterM: +(3.2 * growthScale).toFixed(1),
+          heightM: +(3.8 * growthScale).toFixed(1),
+          fruitCount: actualFruits,
+          baggedRatioPct: actualFruits > 0 ? 94 : 0,
+          healthScore: isPlantDistressed ? 64 : 96,
+          chlorophyllIndex: isPlantDistressed ? 0.52 : 0.88,
+          soilMoisturePct: +(65 + (Math.random() - 0.5) * 6).toFixed(1),
+          estimatedValueThb: singleTreeValue,
+        };
+
+        const plantElevation = selectedCrop === 'rice' ? 0 : 0.28;
+        plantMesh.position.set(posX, plantElevation, posZ);
+        group.add(plantMesh);
+      }
+    }
+  };
+
   // -------------------------------------------------------------
   // Three.js Scene Setup & Lifecycle
   // -------------------------------------------------------------
   useEffect(() => {
     if (!mountRef.current) return;
 
-    const isSoftwareGl = (() => {
-      const gl = document.createElement('canvas').getContext('webgl2');
-      if (!gl) return true;
-      const ext = gl.getExtension('WEBGL_debug_renderer_info');
-      const param = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER;
-      const gpu = String(gl.getParameter(param));
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
-      return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
-    })();
-
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xdce7d5);
     scene.fog = new THREE.Fog(0xdce7d5, 25, 75);
     sceneRef.current = scene;
 
+    const width = mountRef.current.clientWidth || 800;
+    const height = mountRef.current.clientHeight || 500;
+
     const camera = new THREE.PerspectiveCamera(
       45,
-      mountRef.current.clientWidth / mountRef.current.clientHeight,
+      width / height,
       0.1,
       200
     );
@@ -1177,29 +1273,44 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({
-      antialias: !isSoftwareGl,
+      antialias: true,
       powerPreference: 'high-performance',
+      alpha: false,
     });
-    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
-    renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = !isSoftwareGl;
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.1;
-    mountRef.current.appendChild(renderer.domElement);
+
+    renderer.domElement.style.display = 'block';
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+
+    // Replace any existing canvas cleanly
+    mountRef.current.replaceChildren(renderer.domElement);
     rendererRef.current = renderer;
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = !isSoftwareGl;
+    controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI / 2 - 0.05;
     controls.minDistance = 0.6;
     controls.maxDistance = 55;
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
     controlsRef.current = controls;
+
+    // Ambient light to ensure bright visibility from all view angles
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
+    scene.add(ambientLight);
 
     const sunLight = new THREE.DirectionalLight(0xfff7e6, 1.4);
     sunLight.position.set(20, 30, 15);
-    sunLight.castShadow = !isSoftwareGl;
+    sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 1024;
     sunLight.shadow.mapSize.height = 1024;
     scene.add(sunLight);
@@ -1226,6 +1337,9 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
     const plantGroup = new THREE.Group();
     scene.add(plantGroup);
     plantGroupRef.current = plantGroup;
+
+    // Synchronously populate all trees from frame 0!
+    populateTreesInGroup(plantGroup);
 
     // 3D Central Plains Orchard Landscape (Canal ditches, water, raised beds, mounds)
     const orchardLandscapeGroup = new THREE.Group();
@@ -1538,13 +1652,27 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
 
     const handleResize = () => {
       if (!mountRef.current || !renderer || !camera) return;
-      camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+      const w = mountRef.current.clientWidth;
+      const h = mountRef.current.clientHeight;
+      if (w > 0 && h > 0) {
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
     };
     window.addEventListener('resize', handleResize);
 
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+    resizeObserver.observe(mountRef.current);
+
+    // Initial size trigger after next tick to ensure correct layout dimensions
+    setTimeout(handleResize, 50);
+    setTimeout(handleResize, 200);
+
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       domElem.removeEventListener('mousedown', handlePointerDown);
       domElem.removeEventListener('mousemove', handlePointerMove);
@@ -1595,82 +1723,8 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
   // Re-populate Plants whenever Crop, Timeline, or Distress state changes
   useEffect(() => {
     if (!plantGroupRef.current) return;
-
-    while (plantGroupRef.current.children.length > 0) {
-      const child = plantGroupRef.current.children[0];
-      plantGroupRef.current.remove(child);
-    }
-
-    if (selectedCrop === 'rice') {
-      if (orchardLandscapeRef.current) orchardLandscapeRef.current.visible = false;
-      if (terrainMeshRef.current) terrainMeshRef.current.position.y = 0;
-      const ricePaddy = buildRicePaddy(isPlantDistressed);
-      plantGroupRef.current.add(ricePaddy);
-      return;
-    } else {
-      if (terrainMeshRef.current) terrainMeshRef.current.position.y = -0.54;
-      if (orchardLandscapeRef.current) {
-        orchardLandscapeRef.current.visible = true;
-        build3DOrchardLandscape(orchardLandscapeRef.current, isPlantDistressed);
-      }
-    }
-
-    const isPlotA = initialPlot?.plotId === 'plot_a' || plotAreaRai >= 70;
-    const isPlotB = initialPlot?.plotId === 'plot_b' || (plotAreaRai >= 20 && plotAreaRai < 70);
-
-    const countX = selectedCrop === 'cassava' ? 7 : isPlotA ? 8 : isPlotB ? 5 : 3;
-    const countZ = selectedCrop === 'cassava' ? 7 : isPlotA ? 8 : isPlotB ? 5 : 3;
-
-    const spacing =
-      selectedCrop === 'oilpalm' ? 4.8 :
-      selectedCrop === 'rubber' ? 3.6 :
-      isPlotA ? 3.2 : isPlotB ? 3.8 : 4.4;
-
-    for (let ix = -Math.floor(countX / 2); ix <= Math.floor(countX / 2); ix++) {
-      for (let iz = -Math.floor(countZ / 2); iz <= Math.floor(countZ / 2); iz++) {
-        const posX = ix * spacing + (Math.random() - 0.5) * 0.2;
-        const posZ = iz * spacing + (Math.random() - 0.5) * 0.2;
-
-        let plantMesh: THREE.Group;
-        if (selectedCrop === 'rubber') plantMesh = buildRubberTree(growthScale, isPlantDistressed);
-        else if (selectedCrop === 'oilpalm') plantMesh = buildOilPalmTree(growthScale, isPlantDistressed);
-        else if (selectedCrop === 'cassava') plantMesh = buildCassavaBush(growthScale, isPlantDistressed);
-        else plantMesh = buildMangoTree(growthScale, isPlantDistressed, selectedCrop);
-
-        // Assign individualized tree data for interactive clicking & inspection
-        const treeIndex = (ix + Math.floor(countX / 2)) * countZ + (iz + Math.floor(countZ / 2)) + 1;
-        const varietyInfo = CROPS[selectedCrop] || CROPS.mango_namdokmai;
-        const baseFruit = timelineYear >= 10 ? 120 : timelineYear >= 5 ? 65 : timelineYear >= 3 ? 25 : 0;
-        const fruitVariance = Math.round((Math.random() - 0.5) * 12);
-        const actualFruits = Math.max(0, baseFruit + fruitVariance);
-        const treeAge = timelineYear === 0 ? 0.5 : timelineYear === 1 ? 1.5 : timelineYear === 3 ? 3.5 : timelineYear === 5 ? 6 : 10;
-        const singleTreeValue = timelineYear >= 5 ? 1500 : timelineYear >= 3 ? 1000 : 500;
-
-        plantMesh.userData = {
-          id: `MNG-ROW${ix + Math.floor(countX / 2) + 1}-T${iz + Math.floor(countZ / 2) + 1}`,
-          row: ix + Math.floor(countX / 2) + 1,
-          col: iz + Math.floor(countZ / 2) + 1,
-          varietyTh: varietyInfo.nameThai.split('(')[0],
-          varietyEn: varietyInfo.nameEnglish.split('(')[0],
-          varietyId: selectedCrop,
-          ageYears: treeAge,
-          canopyDiameterM: +(3.2 * growthScale).toFixed(1),
-          heightM: +(3.8 * growthScale).toFixed(1),
-          fruitCount: actualFruits,
-          baggedRatioPct: actualFruits > 0 ? 94 : 0,
-          healthScore: isPlantDistressed ? 64 : 96,
-          chlorophyllIndex: isPlantDistressed ? 0.52 : 0.88,
-          soilMoisturePct: +(65 + (Math.random() - 0.5) * 6).toFixed(1),
-          estimatedValueThb: singleTreeValue,
-        };
-
-        // Plants sit atop the raised planting bed at Y = 0.28m
-        const plantElevation = selectedCrop === 'rice' ? 0 : 0.28;
-        plantMesh.position.set(posX, plantElevation, posZ);
-        plantGroupRef.current.add(plantMesh);
-      }
-    }
-  }, [selectedCrop, timelineYear, growthScale, isPlantDistressed, showFruits]);
+    populateTreesInGroup(plantGroupRef.current);
+  }, [selectedCrop, timelineYear, growthScale, isPlantDistressed, showFruits, initialPlot, plotAreaRai]);
 
   // Intelligent Camera Focus Angle Controller for individual trees
   // Positions camera outside foliage in row aisle corridor with complete line of sight
@@ -1777,7 +1831,7 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
               onClick={() => setSimulatorTab('3d')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer min-h-[40px] ${
                 simulatorTab === '3d'
                   ? 'bg-emerald-600 text-white shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -1789,19 +1843,19 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
 
             <button
               onClick={() => setSimulatorTab('pin_mapping')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer min-h-[40px] ${
                 simulatorTab === 'pin_mapping'
                   ? 'bg-emerald-600 text-white shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <MapPin className="w-4 h-4" />
-              <span>{lang === 'th' ? '2. ปักหมุดวัดแปลงดาวเทียม (วิธีที่ 2)' : '2. Tap-to-Pin Mapping'}</span>
+              <span>{lang === 'th' ? '2. ปักหมุดวัดแปลงดาวเทียม' : '2. Tap-to-Pin Mapping'}</span>
             </button>
           </div>
         </div>
 
-        <span className="text-slate-500 font-mono text-[11px]">
+        <span className="text-slate-500 font-mono text-[11px] hidden sm:inline">
           {simulatorTab === '3d'
             ? `แสดงผลแปลง: ${uploadedImageName} (${plotAreaRai} ไร่)`
             : 'โหมดปักหมุดดาวเทียม: คลิกบนแผนที่เพื่อคำนวณ ไร่-งาน-วา'}
@@ -1816,1029 +1870,1199 @@ export const FarmSimulator3D: React.FC<FarmSimulator3DProps> = ({ lang, initialP
       </div>
 
       <div style={{ display: simulatorTab === '3d' ? 'block' : 'none' }} className="space-y-4">
-      {/* 2D Upload to 3D Conversion Control Bar */}
-      <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
-              <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                {lang === 'th' ? 'ระบบแปลงภาพ 2D สู่โมเดล 3D' : '2D Land Photo to 3D Model Engine'}
-              </span>
-              <span>·</span>
-              <span>{lang === 'th' ? 'จำลองการเติบโต 3, 5, 10 ปี' : '3, 5, 10-Year Growth Simulation'}</span>
-            </div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-              {lang === 'th' ? 'แปลงรูปถ่ายแปลงที่ดิน (2D) เป็นแบบจำลองสวน 3 มิติ' : 'Convert 2D Land Photos into Interactive 3D Farm'}
-            </h2>
-            <p className="text-xs text-slate-600 mt-1">
-              {lang === 'th'
-                ? 'อัปโหลดภาพถ่ายทางอากาศ ภาพถ่ายจากโดรน โฉนดที่ดิน หรือผังแปลง 2 มิติ เพื่อสร้างพื้นผิวภูมิประเทศและจำลองทรงพุ่มต้นไม้จริง'
-                : 'Upload drone shots, land deeds, or satellite maps to map real terrain textures and projected tree canopies.'}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {uploaded2DImage && (
-              <button
-                onClick={() => setShow2DInspector(!show2DInspector)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-colors cursor-pointer"
-              >
-                <ImageIcon className="w-4 h-4 text-emerald-700" />
-                <span>{lang === 'th' ? (show2DInspector ? 'ซ่อนภาพ 2D' : 'ดูภาพ 2D เทียบ 3D') : 'Toggle 2D/3D'}</span>
-              </button>
-            )}
+        {/* Quick 1-Click Plot Switcher (Directly on 3D Digital Twin) */}
+        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-extrabold text-slate-800 flex items-center gap-1.5">
+              <Box className="w-4 h-4 text-emerald-600" />
+              <span>{lang === "th" ? "เลือกส่องแปลง 3D:" : "3D Plot Preset:"}</span>
+            </span>
+            <button
+              onClick={() => {
+                setSelectedCrop("mango_namdokmai");
+                setPendingCrop("mango_namdokmai");
+                setPlotAreaRai(70);
+                setTimelineYear(10);
+                setUploadedImageName("แปลง A — มะม่วงน้ำดอกไม้สีทอง (70 ไร่ / 1,750 ต้น)");
+                setActiveMobileStep("3d_viewer");
+              }}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                plotAreaRai >= 70 && selectedCrop === "mango_namdokmai"
+                  ? "bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-400"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>{lang === "th" ? "แปลง A: น้ำดอกไม้ (1,750 ต้น / 70 ไร่)" : "Plot A: 1,750 Trees (70 Rai)"}</span>
+            </button>
 
             <button
-              onClick={handleShare3DFarm}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+              onClick={() => {
+                setSelectedCrop("mango_mahachanok");
+                setPendingCrop("mango_mahachanok");
+                setPlotAreaRai(25);
+                setTimelineYear(5);
+                setUploadedImageName("แปลง B — มะม่วงมหาชนกส่งออก (25 ไร่ / 625 ต้น)");
+                setActiveMobileStep("3d_viewer");
+              }}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                plotAreaRai === 25 && selectedCrop === "mango_mahachanok"
+                  ? "bg-teal-600 text-white shadow-xs ring-2 ring-teal-400"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
             >
-              {copied3DLink ? (
-                <>
-                  <Check className="w-4 h-4 text-emerald-300" />
-                  <span>{lang === 'th' ? 'คัดลอกลิงก์ 3D แล้ว' : 'Copied 3D Link'}</span>
-                </>
-              ) : (
-                <>
-                  <Share2 className="w-4 h-4 text-emerald-200" />
-                  <span>{lang === 'th' ? 'แชร์สวน 3D' : 'Share 3D Farm'}</span>
-                </>
-              )}
+              <span className="w-2 h-2 rounded-full bg-teal-400" />
+              <span>{lang === "th" ? "แปลง B: มหาชนก (625 ต้น / 25 ไร่)" : "Plot B: 625 Trees (25 Rai)"}</span>
             </button>
+
+            <button
+              onClick={() => {
+                setSelectedCrop("mango_rad");
+                setPendingCrop("mango_rad");
+                setPlotAreaRai(10);
+                setTimelineYear(3);
+                setUploadedImageName("แปลง C — มะม่วงเขียวสามรส (10 ไร่ / 220 ต้น)");
+                setActiveMobileStep("3d_viewer");
+              }}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                plotAreaRai === 10
+                  ? "bg-amber-600 text-white shadow-xs ring-2 ring-amber-400"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              <span>{lang === "th" ? "แปลง C: เขียวสามรส (220 ต้น / 10 ไร่)" : "Plot C: 220 Trees (10 Rai)"}</span>
+            </button>
+          </div>
+
+          <div className="text-[11px] font-mono text-slate-500">
+            {lang === "th" ? "กำลังแสดงผล:" : "Viewing:"} <strong className="text-slate-800">{uploadedImageName}</strong>
           </div>
         </div>
 
-        {/* Copy Toast Banner */}
-        {copied3DLink && (
-          <div className="p-3 bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-between shadow-md animate-fade-in">
-            <div className="flex items-center gap-2">
-              <Check className="w-4 h-4 text-emerald-200 shrink-0" />
-              <span>
-                {lang === 'th'
-                  ? 'คัดลอกลิงก์แชร์สวน 3D เรียบร้อยแล้ว! สามารถนำไปส่งต่อให้ผู้อื่นเปิดดูได้ทันที'
-                  : '3D Farm View link copied to clipboard! Anyone can open it directly.'}
-              </span>
+{/* MAIN 3D MODEL CANVAS CONTAINER (Optimized for Mobile Viewers) */}
+        <div className={`relative w-full ${
+          isFullscreen3D
+            ? 'fixed inset-0 z-50 bg-slate-950 flex flex-col animate-in fade-in duration-200'
+            : 'space-y-3'
+        }`}>
+          {/* Fullscreen Mobile Viewport Header Bar */}
+          {isFullscreen3D && (
+            <div className="bg-slate-900/95 backdrop-blur-md px-4 py-3 text-white flex items-center justify-between border-b border-slate-800 shrink-0 z-40">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-extrabold text-sm sm:text-base tracking-tight">
+                  {lang === 'th' ? ' Plotty 3D Fullscreen View' : ' Plotty 3D Viewport'}
+                </span>
+                <span className="text-[10px] bg-emerald-950 text-emerald-300 font-bold px-2 py-0.5 rounded border border-emerald-800">
+                  {crop.nameThai}
+                </span>
+              </div>
+              <button
+                onClick={() => setIsFullscreen3D(false)}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs min-h-[40px]"
+              >
+                <Minimize2 className="w-4 h-4 text-emerald-100" />
+                <span>{lang === 'th' ? 'ออกจากโหมดเต็มจอ' : 'Exit Fullscreen'}</span>
+              </button>
             </div>
-            <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-mono">Public Link</span>
-          </div>
-        )}
+          )}
 
-        {/* Prominent 2D Upload Card / Dropzone */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Main Upload Button / Dropzone */}
+          {/* WebGL Canvas Element Box */}
           <div
-            onClick={() => fileInputRef.current?.click()}
-            className="md:col-span-1 border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50/80 rounded-2xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group"
+            id="tour-step-2"
+            style={{ minHeight: '380px', height: isFullscreen3D ? '100%' : '560px' }}
+            className={`relative w-full rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-200 bg-slate-950 shadow-xl transition-all ${
+              isFullscreen3D ? 'flex-1 h-full rounded-none border-none' : 'h-[380px] sm:h-[560px] md:h-[620px]'
+            }`}
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleCustomImageUpload}
-              className="hidden"
+            <div
+              ref={mountRef}
+              style={{ width: '100%', height: '100%', minHeight: '380px', position: 'relative' }}
+              className="w-full h-full cursor-grab active:cursor-grabbing touch-none"
             />
-            <div className="w-11 h-11 rounded-xl bg-emerald-600 group-hover:bg-emerald-700 text-white flex items-center justify-center shadow-xs transition-colors">
-              <Upload className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 block">
-                {lang === 'th' ? 'อัปโหลดรูปแปลง 2D ของท่าน' : 'Upload Your 2D Land Image'}
-              </span>
-              <span className="text-[11px] text-slate-500 block mt-0.5">
-                {lang === 'th' ? 'รองรับภาพโดรน, ดาวเทียม, หรือโฉนด' : 'Supports drone, satellite, or aerial photos'}
-              </span>
-            </div>
-            {activePresetId === 'custom' && (
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
-                {lang === 'th' ? 'ใช้งานภาพของคุณอยู่' : 'Active Custom Image'}
-              </span>
-            )}
-          </div>
 
-          {/* 3 Realistic Thai 2D Land Presets */}
-          <div className="md:col-span-2 space-y-2">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-              {lang === 'th' ? 'หรือทดลองคลิกเลือกภาพถ่ายแปลงตัวอย่างของไทย (1-Click Presets):' : 'Or Try Realistic Thai 2D Presets:'}
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {LAND_MAP_PRESETS.map((preset) => {
-                const isSelected = activePresetId === preset.id;
-                return (
+            {/* Mobile / Desktop Top Left Spec Badge */}
+            <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 transition-all">
+              {/* Desktop Always Visible / Mobile Collapsible Toggle */}
+              <div className="hidden sm:block bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-3 text-slate-800 shadow-md max-w-xs text-xs space-y-1.5">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <div
+                    className={`w-2.5 h-2.5 rounded-full ${
+                      riskScenario === 'flood'
+                        ? hasFloodDefense ? 'bg-sky-500' : 'bg-rose-500 animate-ping'
+                        : riskScenario === 'drought'
+                        ? hasDroughtDefense ? 'bg-amber-500' : 'bg-amber-500 animate-ping'
+                        : 'bg-emerald-500'
+                    }`}
+                  />
+                  <span className="text-xs font-bold tracking-tight text-slate-900">
+                    {lang === 'th' ? crop.nameThai : crop.nameEnglish} (โมเดล 3D)
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 font-mono space-y-0.5">
+                  <div>{sqmToString(totalSqm, lang)}</div>
+                  <div className="truncate">{lang === 'th' ? 'ภาพฐาน:' : 'Base 2D:'} {uploadedImageName}</div>
+                  <div>{lang === 'th' ? 'จำนวนต้น:' : 'Trees:'} {totalTrees.toLocaleString()} {lang === 'th' ? 'ต้น' : 'trees'}</div>
+                  <div className="pt-1 border-t border-slate-100 text-emerald-700 font-semibold text-[11px] flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span className="truncate">
+                      {selectedCrop.includes('mango')
+                        ? timelineYear >= 3
+                          ? `ผลมะม่วงส่งออก: ~${timelineYear >= 10 ? 120 : timelineYear >= 5 ? 65 : 25} ลูก/ต้น`
+                          : 'ระยะสะสมตาดอกและทรงพุ่ม'
+                        : 'ผลผลิตสมบูรณ์'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile Spec Pill Toggle Button */}
+              <button
+                onClick={() => setShowMobileSpecBadge(!showMobileSpecBadge)}
+                className="sm:hidden flex items-center gap-1.5 px-3 py-2 bg-white/95 backdrop-blur-md text-slate-900 border border-slate-200/90 rounded-xl text-xs font-bold shadow-md cursor-pointer min-h-[40px]"
+              >
+                <Box className="w-4 h-4 text-emerald-600" />
+                <span>{lang === 'th' ? 'ข้อมูลแปลง 3D' : 'Plot Specs'}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showMobileSpecBadge ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Mobile Spec Expanded Drawer */}
+              {showMobileSpecBadge && (
+                <div className="sm:hidden mt-2 bg-white/98 backdrop-blur-md border border-slate-200 rounded-2xl p-3 text-slate-900 shadow-xl max-w-[260px] text-xs space-y-2 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+                    <span className="font-extrabold text-xs text-slate-900">{crop.nameThai}</span>
+                    <button
+                      onClick={() => setShowMobileSpecBadge(false)}
+                      className="p-1 text-slate-400 hover:text-slate-700"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-slate-600 font-mono space-y-1">
+                    <div>• {sqmToString(totalSqm, lang)}</div>
+                    <div>• {lang === 'th' ? 'ต้นไม้รวม:' : 'Trees:'} {totalTrees.toLocaleString()} ต้น</div>
+                    <div>• {lang === 'th' ? 'ปีจำลอง:' : 'Year:'} ปีที่ {timelineYear}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Top Right Quick Controls Strip (Responsive & Non-Overlapping) */}
+            <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5">
+              {/* Fullscreen Expand Button (Crucial for Mobile Phones!) */}
+              <button
+                onClick={() => setIsFullscreen3D(!isFullscreen3D)}
+                className="px-2.5 py-2 sm:px-3 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5 cursor-pointer min-h-[40px]"
+                title={isFullscreen3D ? 'Exit Fullscreen' : 'Open Fullscreen View'}
+              >
+                {isFullscreen3D ? <Minimize2 className="w-4 h-4 text-emerald-100" /> : <Maximize2 className="w-4 h-4 text-emerald-100" />}
+                <span className="hidden xs:inline">{isFullscreen3D ? 'ย่อหน้าจอ' : 'จอเต็ม 3D'}</span>
+              </button>
+
+              {/* Layer & Tool Toggle Group */}
+              <div className="hidden sm:flex items-center gap-1 bg-white/95 backdrop-blur-md border border-slate-200/90 p-1 rounded-xl text-slate-700 shadow-md text-xs">
+                <button
+                  onClick={() => setSatelliteLayer('normal')}
+                  className={`px-2.5 py-1 rounded-lg transition-colors font-semibold cursor-pointer ${
+                    satelliteLayer === 'normal' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  2D/3D
+                </button>
+                <button
+                  onClick={() => setSatelliteLayer('ndvi')}
+                  className={`px-2.5 py-1 rounded-lg transition-colors font-semibold cursor-pointer ${
+                    satelliteLayer === 'ndvi' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  NDVI
+                </button>
+                <button
+                  onClick={() => setSatelliteLayer('ndwi')}
+                  className={`px-2.5 py-1 rounded-lg transition-colors font-semibold cursor-pointer ${
+                    satelliteLayer === 'ndwi' ? 'bg-sky-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  NDWI
+                </button>
+              </div>
+
+              {/* Mobile Quick Tools Drawer Toggle */}
+              <button
+                onClick={() => setShowMobileQuickTools(!showMobileQuickTools)}
+                className="sm:hidden flex items-center gap-1 px-2.5 py-2 bg-white/95 text-slate-900 border border-slate-200/90 rounded-xl text-xs font-bold shadow-md cursor-pointer min-h-[40px]"
+              >
+                <SlidersHorizontal className="w-4 h-4 text-slate-700" />
+                <span>{lang === 'th' ? 'เลเยอร์' : 'Layers'}</span>
+              </button>
+            </div>
+
+            {/* Mobile Quick Tools Popup Menu */}
+            {showMobileQuickTools && (
+              <div className="sm:hidden absolute top-14 right-3 z-30 bg-white/98 backdrop-blur-md border border-slate-200 rounded-2xl p-3 text-slate-900 shadow-2xl space-y-2 max-w-[240px] text-xs animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-100 font-bold">
+                  <span>{lang === 'th' ? 'สลับเลเยอร์ & การแสดงผล' : 'Layers & Visibility'}</span>
+                  <button onClick={() => setShowMobileQuickTools(false)} className="p-1 text-slate-400">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-bold text-slate-500">{lang === 'th' ? 'แผนที่ดาวเทียม:' : 'Satellite Overlay:'}</div>
+                  <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl text-[10.5px]">
+                    <button
+                      onClick={() => setSatelliteLayer('normal')}
+                      className={`py-1 rounded-lg font-bold ${satelliteLayer === 'normal' ? 'bg-emerald-600 text-white' : 'text-slate-700'}`}
+                    >
+                      2D/3D
+                    </button>
+                    <button
+                      onClick={() => setSatelliteLayer('ndvi')}
+                      className={`py-1 rounded-lg font-bold ${satelliteLayer === 'ndvi' ? 'bg-emerald-600 text-white' : 'text-slate-700'}`}
+                    >
+                      NDVI
+                    </button>
+                    <button
+                      onClick={() => setSatelliteLayer('ndwi')}
+                      className={`py-1 rounded-lg font-bold ${satelliteLayer === 'ndwi' ? 'bg-sky-600 text-white' : 'text-slate-700'}`}
+                    >
+                      NDWI
+                    </button>
+                  </div>
+
+                  <div className="pt-1 flex items-center justify-between">
+                    <span className="text-[11px] font-medium">{lang === 'th' ? 'ผลไม้ 3D:' : '3D Fruits:'}</span>
+                    <button
+                      onClick={() => setShowFruits(!showFruits)}
+                      className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold ${showFruits ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-700'}`}
+                    >
+                      {showFruits ? 'แสดงผล' : 'ซ่อน'}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium">{lang === 'th' ? 'เซนเซอร์ IoT:' : 'IoT Sensors:'}</span>
+                    <button
+                      onClick={() => setShow5GNodes(!show5GNodes)}
+                      className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold ${show5GNodes ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+                    >
+                      {show5GNodes ? 'เปิดใช้งาน' : 'ปิด'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Smart Agri IoT Telemetry Card */}
+            {show5GNodes && (
+              <div className="absolute top-[60px] left-3 right-3 sm:left-auto sm:right-4 sm:top-[76px] z-30 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 text-slate-900 max-w-none sm:max-w-xs shadow-xl space-y-2 animate-fade-in">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="font-bold text-xs tracking-tight text-slate-900">
+                      {lang === 'th' ? 'สถานีเซนเซอร์วัดค่าไร่นา IoT' : 'Smart Agri IoT Station'}
+                    </span>
+                  </div>
                   <button
-                    key={preset.id}
-                    onClick={() => handleSelectPreset(preset)}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 ${
-                      isSelected
-                        ? 'border-emerald-600 bg-emerald-50/70 shadow-xs ring-1 ring-emerald-500'
-                        : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300'
+                    onClick={() => setShow5GNodes(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
+                    aria-label="Close sensor card"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Node Switcher Tabs */}
+                <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl text-[10.5px] font-semibold text-center">
+                  <button
+                    onClick={() => setSelected5GNode('node-1')}
+                    className={`py-1.5 rounded-lg transition-colors cursor-pointer min-h-[36px] ${
+                      selected5GNode === 'node-1' ? 'bg-white text-emerald-800 shadow-2xs font-bold' : 'text-slate-600'
                     }`}
                   >
-                    <div
-                      className="w-8 h-8 rounded-lg shrink-0 mt-0.5 flex items-center justify-center text-white text-xs font-bold shadow-xs"
-                      style={{ backgroundColor: preset.previewColor }}
-                    >
-                      2D
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-900 line-clamp-1 block">
-                        {lang === 'th' ? preset.titleThai : preset.titleEnglish}
-                      </span>
-                      <span className="text-[10px] text-slate-500 line-clamp-1 mt-0.5 block">
-                        {preset.descriptionThai}
-                      </span>
-                      {isSelected && (
-                        <span className="text-[9px] font-bold text-emerald-700 block mt-1">
-                          ● {lang === 'th' ? 'ฉายลงโมเดล 3D อยู่' : 'Projected on 3D'}
-                        </span>
-                      )}
-                    </div>
+                    {lang === 'th' ? 'ดิน & NPK' : 'Soil'}
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* STEP 2: Choose What to Plant & Run 3D Prediction */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-0.5">
-              <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">ขั้นตอนที่ 2</span>
-              <span>{lang === 'th' ? 'เลือกพืชที่ต้องการปลูกบนแปลงนี้' : 'Select Crop to Plant & Simulate'}</span>
-            </div>
-            <h3 className="text-base font-bold text-slate-900">
-              {lang === 'th' ? 'ท่านต้องการปลูกพืชเศรษฐกิจชนิดใด?' : 'Which Crop Would You Like to Plant?'}
-            </h3>
-          </div>
-
-          <button
-            onClick={() => {
-              setSelectedCrop(pendingCrop);
-              setHasSimulated(true);
-            }}
-            className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-xs cursor-pointer transition-colors"
-          >
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>{lang === 'th' ? 'เริ่มจำลองแปลงปลูก & ทำนายผลผลิต 3D' : 'Simulate & Predict 3D Farm'}</span>
-          </button>
-        </div>
-
-        {/* 6 Core Thai Economic Crops Quick-Selector */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          {Object.values(CROPS).map((c) => {
-            const isSelected = pendingCrop === c.id;
-            return (
-              <button
-                key={c.id}
-                onClick={() => {
-                  setPendingCrop(c.id);
-                  setSelectedCrop(c.id);
-                  setHasSimulated(true);
-                }}
-                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  isSelected
-                    ? 'border-emerald-600 bg-emerald-50/80 ring-2 ring-emerald-500 shadow-xs'
-                    : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.color }} />
-                    <span className="text-[10px] font-bold text-slate-500 font-mono">
-                      ฿{c.currentPrice}
-                    </span>
-                  </div>
-                  <span className="text-xs font-bold text-slate-900 line-clamp-1 block">
-                    {lang === 'th' ? c.nameThai.split('(')[0] : c.nameEnglish.split('(')[0]}
-                  </span>
-                </div>
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  {c.id === 'rice' ? 'ผลผลิตต่อรอบ 4 เดือน' : `ให้ผลผลิตปีที่ ${c.yearsToFirstHarvest}`}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* STEP 3: Crisis & Risk Scenarios in 3D (Flooding, Drought, and Defense Engineering) */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-0.5">
-              <span className="font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-md">ขั้นตอนที่ 3</span>
-              <span>{lang === 'th' ? 'แบบจำลองสภาวะวิกฤต & มาตรการป้องกัน 3D' : '3D Climate Disaster Simulation & Defense'}</span>
-            </div>
-            <h3 className="text-base font-bold text-slate-900">
-              {lang === 'th' ? 'ทำนายความเสี่ยงสภาพอากาศ & ออกแบบวิธีป้องกันในโมเดล 3D' : 'Predict Weather Risks & Build 3D Defenses'}
-            </h3>
-          </div>
-
-          {/* Scenario Selector Pills */}
-          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-auto">
-            <button
-              onClick={() => {
-                setRiskScenario('normal');
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                riskScenario === 'normal'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {lang === 'th' ? 'ปกติ' : 'Normal'}
-            </button>
-            <button
-              onClick={() => {
-                setRiskScenario('flood');
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                riskScenario === 'flood'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {lang === 'th' ? 'เสี่ยงน้ำท่วม' : 'Flood'}
-            </button>
-            <button
-              onClick={() => {
-                setRiskScenario('drought');
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                riskScenario === 'drought'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {lang === 'th' ? 'เสี่ยงภัยแล้ง' : 'Drought'}
-            </button>
-          </div>
-        </div>
-
-        {/* Dynamic Scenario Explanation & 3D Interactive Defense Action */}
-        {riskScenario === 'normal' && (
-          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs text-emerald-950">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>
-                {lang === 'th'
-                  ? 'สภาพอากาศปกติ ดินมีความชื้นเหมาะสม ทรงพุ่มเขียวชอุ่ม ให้ผลผลิตได้เต็ม 100%'
-                  : 'Normal climate conditions. Soil moisture is optimal and plants are thriving at 100% yield potential.'}
-              </span>
-            </div>
-            <span className="font-bold text-emerald-700 shrink-0 font-mono">ผลผลิต 100%</span>
-          </div>
-        )}
-
-        {riskScenario === 'flood' && (
-          <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-              <div className="space-y-1">
-                <span className="font-bold text-blue-900 block text-sm">
-                  {hasFloodDefense
-                    ? lang === 'th' ? 'ระบบคันดินกั้นน้ำและคูระบายน้ำปกป้องแปลงสำเร็จ' : 'Earthen Dyke & Moat Defenses Active'
-                    : lang === 'th' ? 'เกิดภาวะน้ำท่วมขังสูง 40 ซม. เสี่ยงสูญเสียผลผลิต 75%' : '40cm Flood Inundation! 75% Yield Loss Risk'}
-                </span>
-                <p className="text-slate-600 text-[11px] leading-relaxed max-w-xl">
-                  {hasFloodDefense
-                    ? lang === 'th'
-                      ? 'โมเดล 3D ได้ยกคันดินกั้นน้ำสูง 1.3 เมตรรอบแปลง 4 ด้าน พร้อมเปิดคูระบายน้ำ น้ำท่วมถูกสกัดกั้นอยู่นอกแปลง ต้นไม้รอดตายปลอดภัย 95%'
-                      : '3D raised berms around perimeter stop flooding. Water channeled into drainage ditch.'
-                    : lang === 'th'
-                      ? 'ระดับน้ำท่วมท่วมคลุมโคนต้นไม้ รากขาดออกซิเจน เสี่ยงโรครากเน่าโคนเน่า (ไฟทอปธอรา) ใบเปลี่ยนเป็นสีเหลือง ยืนต้นตายใน 14 วัน'
-                      : 'Standing water suffocates root collars. Leaves yellow and die within 14 days without drainage.'}
-                </p>
-              </div>
-
-              {/* 3D Defense Toggle Button */}
-              <button
-                onClick={() => setHasFloodDefense(!hasFloodDefense)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer shrink-0 ${
-                  hasFloodDefense
-                    ? 'bg-blue-700 text-white ring-2 ring-blue-400'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
-              >
-                <ShieldCheck className="w-4 h-4 text-blue-200" />
-                <span>
-                  {hasFloodDefense
-                    ? lang === 'th' ? 'ยกคันดินกั้นน้ำแล้ว (กดเพื่อปลด)' : 'Dykes Built (Click to remove)'
-                    : lang === 'th' ? 'สร้างคันดินกั้นน้ำ & ขุดคูน้ำ 3D' : 'Build 3D Flood Dykes & Moat'}
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {riskScenario === 'drought' && (
-          <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-              <div className="space-y-1">
-                <span className="font-bold text-amber-900 block text-sm">
-                  {hasDroughtDefense
-                    ? lang === 'th' ? 'สระกักเก็บน้ำโคกหนองนา & ระบบน้ำหยดหล่อเลี้ยงแปลงสำเร็จ' : 'Retention Pond & Drip Irrigation Grid Active'
-                    : lang === 'th' ? 'ฝนทิ้งช่วง 45 วัน ดินแตกระแหง ดอกและผลอ่อนร่วงหล่น' : '45-Day Severe Drought! 65% Yield Loss Risk'}
-                </span>
-                <p className="text-slate-600 text-[11px] leading-relaxed max-w-xl">
-                  {hasDroughtDefense
-                    ? lang === 'th'
-                      ? 'โมเดล 3D มีสระกักเก็บน้ำลึกโคกหนองนา และเดินท่อน้ำหยด HDPE สีดำพาดผ่านทุกแถว ดินชุ่มชื้น ต้นไม้กลับมาเขียวสดใส ผลผลิตสมบูรณ์ 95%'
-                      : '3D retention pond and micro-drip feeder tubes supply water along all planting rows.'
-                    : lang === 'th'
-                      ? 'ดินแตกระแหง สระน้ำแห้งเหือด ทรงพุ่มเหี่ยวเฉา ดอกและผลทุเรียน/ผลไม้ร่วงหล่น ผลผลิตลดลงกว่า 65%'
-                      : 'Severe water deficit causes flower & fruit drop. Parched earth texture.'}
-                </p>
-              </div>
-
-              {/* 3D Defense Toggle Button */}
-              <button
-                onClick={() => setHasDroughtDefense(!hasDroughtDefense)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer shrink-0 ${
-                  hasDroughtDefense
-                    ? 'bg-amber-700 text-white ring-2 ring-amber-400'
-                    : 'bg-amber-600 hover:bg-amber-700 text-white'
-                }`}
-              >
-                <Droplets className="w-4 h-4 text-amber-200" />
-                <span>
-                  {hasDroughtDefense
-                    ? lang === 'th' ? 'ขุดสระ & เดินท่อน้ำหยดแล้ว' : 'Pond & Drip Built'
-                    : lang === 'th' ? 'ขุดสระโคกหนองนา & วางระบบน้ำหยด 3D' : 'Build 3D Pond & Drip Grid'}
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Side-by-Side 2D Inspector (If toggled) */}
-      {show2DInspector && uploaded2DImage && (
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-bold text-slate-800">
-                {lang === 'th' ? 'ภาพ 2D ต้นฉบับที่นำมาแปลง:' : 'Original 2D Land Photo:'}
-              </span>
-              <span className="text-[11px] text-slate-500 font-mono">({uploadedImageName})</span>
-            </div>
-            <div className="border border-slate-200 rounded-xl overflow-hidden max-h-56 bg-slate-900 flex items-center justify-center">
-              <img
-                src={uploaded2DImage}
-                alt="2D Land Preview"
-                className="max-h-56 object-contain"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2 text-xs text-slate-600 leading-relaxed">
-            <strong className="text-emerald-900 font-bold block text-sm">
-              {lang === 'th' ? 'ระบบแปลงและฉายภาพลงบนโมเดล 3D สำเร็จ' : '2D Projected onto 3D Surface'}
-            </strong>
-            <p>
-              {lang === 'th'
-                ? 'ระบบได้นำภาพถ่ายแปลงที่ดิน 2D ของท่านมาฉายลงบนพื้นผิวภูมิประเทศ 3 มิติ และคำนวณตำแหน่งร่องสวน สระน้ำ และแนวปลูกต้นไม้โดยอัตโนมัติ'
-                : 'The 2D land image has been texture-mapped onto the 3D terrain grid with spatial planting lines calculated automatically.'}
-            </p>
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-mono space-y-1">
-              <div>• {lang === 'th' ? 'ขนาดแปลงที่ตรวจพบ:' : 'Detected Area:'} {plotAreaRai} {lang === 'th' ? 'ไร่' : 'Rai'}</div>
-              <div>• {lang === 'th' ? 'พืชหลักที่วางแนวแปลง:' : 'Assigned Crop:'} {crop.nameThai}</div>
-              <div>• {lang === 'th' ? 'สถานะโมเดล:' : 'Model Status:'} {isConverting ? 'กำลังคำนวณ...' : 'พร้อมจำลองการเติบโต'}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3D WebGL Canvas Container - Responsive height for mobile with tour ID */}
-      <div id="tour-step-2" className="relative w-full h-[460px] sm:h-[620px] rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 shadow-md">
-        <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
-
-        {/* Top Left Floating Spec Badge (Clean Light Theme) */}
-        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-xl p-2.5 sm:p-3 text-slate-800 shadow-md max-w-[240px] sm:max-w-xs text-xs space-y-1.5">
-          <div className="flex items-center gap-2 mb-0.5">
-            <div
-              className={`w-2.5 h-2.5 rounded-full ${
-                riskScenario === 'flood'
-                  ? hasFloodDefense ? 'bg-sky-500' : 'bg-rose-500 animate-ping'
-                  : riskScenario === 'drought'
-                  ? hasDroughtDefense ? 'bg-amber-500' : 'bg-amber-500 animate-ping'
-                  : 'bg-emerald-500'
-              }`}
-            />
-            <span className="text-xs font-bold tracking-tight text-slate-900">
-              {lang === 'th' ? crop.nameThai : crop.nameEnglish} (โมเดล 3D)
-            </span>
-          </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-500 font-mono space-y-0.5">
-            <div>{sqmToString(totalSqm, lang)}</div>
-            <div className="truncate">{lang === 'th' ? 'ภาพฐาน:' : 'Base 2D:'} {uploadedImageName}</div>
-            <div>{lang === 'th' ? 'จำนวนต้น:' : 'Trees:'} {totalTrees.toLocaleString()} {lang === 'th' ? 'ต้น' : 'trees'}</div>
-            
-            {/* 3D Fruit Telemetry Badge */}
-            <div className="pt-1 border-t border-slate-100 text-emerald-700 font-semibold text-[10px] sm:text-[11px] flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span className="truncate">
-                {selectedCrop.includes('mango')
-                  ? timelineYear >= 3
-                    ? lang === 'th'
-                      ? `ผลมะม่วงส่งออก: ~${timelineYear >= 10 ? 120 : timelineYear >= 5 ? 65 : 25} ลูก/ต้น (ห่อถุงคาร์บอน)`
-                      : `Export Mangoes: ~${timelineYear >= 10 ? 120 : timelineYear >= 5 ? 65 : 25} fruits/tree`
-                    : lang === 'th' ? 'ระยะสะสมตาดอกและทรงพุ่ม' : 'Vegetative & canopy growth'
-                  : selectedCrop === 'rubber'
-                  ? lang === 'th' ? 'น้ำยาง: ~8.4 กก./ไร่' : 'Latex: ~8.4 kg/rai'
-                  : selectedCrop === 'oilpalm'
-                  ? lang === 'th' ? 'ทะลายสุก: 4 ทะลาย' : 'Fresh fruit bunches'
-                  : selectedCrop === 'rice'
-                  ? lang === 'th' ? 'รวงทอง: 750 กก./ไร่' : 'Golden panicles'
-                  : lang === 'th' ? 'ผลผลิตมะม่วงสมบูรณ์' : 'Export quality mangoes'}
-              </span>
-            </div>
-          </div>
-
-          {/* Integrated Tap-to-Inspect Helper Badge without any overlap */}
-          <div className="pt-1.5 border-t border-amber-200/80">
-            <div className="bg-amber-100/90 text-amber-950 text-[10px] sm:text-[10.5px] font-bold px-2 py-1 rounded-lg flex items-center gap-1.5 border border-amber-300/80">
-              <Target className="w-3.5 h-3.5 text-amber-800 shrink-0" />
-              <span>{lang === 'th' ? 'คลิกต้นไม้ 3D เพื่อเจาะลึก • มีระบบพรางต้นรอบข้าง (X-Ray)' : 'Click any Tree • Auto X-Ray Focus'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Top Right Controls: Satellite Heatmaps, 3D Fruit & Smart Agri-IoT Toggles (Clean Light Theme) */}
-        <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 flex flex-wrap items-center justify-end gap-1.5 max-w-[280px] sm:max-w-xl">
-          {/* Satellite Layer Switcher Pills */}
-          <div className="flex items-center gap-0.5 sm:gap-1 bg-white/95 backdrop-blur-md border border-slate-200/90 p-0.5 sm:p-1 rounded-xl text-slate-700 shadow-md text-[11px] sm:text-xs">
-            <button
-              onClick={() => setSatelliteLayer('normal')}
-              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg transition-colors font-medium cursor-pointer ${
-                satelliteLayer === 'normal'
-                  ? 'bg-emerald-600 text-white font-bold shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              2D/3D
-            </button>
-            <button
-              onClick={() => setSatelliteLayer('ndvi')}
-              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg transition-colors font-medium cursor-pointer ${
-                satelliteLayer === 'ndvi'
-                  ? 'bg-emerald-600 text-white font-bold shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              NDVI
-            </button>
-            <button
-              onClick={() => setSatelliteLayer('ndwi')}
-              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg transition-colors font-medium cursor-pointer ${
-                satelliteLayer === 'ndwi'
-                  ? 'bg-sky-600 text-white font-bold shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              NDWI
-            </button>
-          </div>
-
-          {/* Smart Agri IoT Overlay Toggle */}
-          <button
-            onClick={() => setShow5GNodes(!show5GNodes)}
-            className={`px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl border text-[11px] sm:text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer ${
-              show5GNodes
-                ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
-                : 'bg-white/95 text-slate-700 border-slate-200/90 hover:bg-slate-50'
-            }`}
-          >
-            <span className={`w-2 h-2 rounded-full ${show5GNodes ? 'bg-white animate-pulse' : 'bg-emerald-500'}`} />
-            <span>
-              {show5GNodes
-                ? lang === 'th' ? 'เซนเซอร์ IoT' : 'IoT Sensors'
-                : lang === 'th' ? 'ดูเซนเซอร์' : 'Show Sensors'}
-            </span>
-          </button>
-
-          {/* 3D Fruit Visibility Toggle Button */}
-          <button
-            onClick={() => setShowFruits(!showFruits)}
-            className={`px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl border text-[11px] sm:text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer ${
-              showFruits
-                ? 'bg-teal-700 text-white border-teal-600 shadow-xs'
-                : 'bg-white/95 text-slate-700 border-slate-200/90 hover:bg-slate-50'
-            }`}
-          >
-            <Eye className={`w-3.5 h-3.5 ${showFruits ? 'text-white' : 'text-slate-500'}`} />
-            <span>
-              {showFruits
-                ? lang === 'th' ? 'ผล 3D' : 'Fruits'
-                : lang === 'th' ? 'แสดงผล' : 'Show Fruits'}
-            </span>
-          </button>
-
-          {/* Camera View Angle Shortcuts */}
-          <div className="flex items-center gap-1 bg-white/95 backdrop-blur-md border border-slate-200/90 p-0.5 sm:p-1 rounded-xl text-slate-700 shadow-md text-[11px] sm:text-xs">
-            <button
-              onClick={() => {
-                if (cameraRef.current && controlsRef.current) {
-                  cameraRef.current.position.set(0, 32, 0.1);
-                  controlsRef.current.target.set(0, 0, 0);
-                  controlsRef.current.update();
-                }
-              }}
-              className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg hover:bg-slate-100 transition-colors font-medium flex items-center gap-1 cursor-pointer text-slate-700"
-            >
-              <Compass className="w-3 h-3 text-emerald-600" />
-              <span>{lang === 'th' ? '90°' : 'Drone'}</span>
-            </button>
-            <button
-              onClick={() => {
-                if (cameraRef.current && controlsRef.current) {
-                  cameraRef.current.position.set(16, 18, 22);
-                  controlsRef.current.target.set(0, 0, 0);
-                  controlsRef.current.update();
-                }
-              }}
-              className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg hover:bg-slate-100 transition-colors font-medium flex items-center gap-1 cursor-pointer text-slate-700"
-            >
-              <Maximize2 className="w-3 h-3 text-sky-600" />
-              <span>{lang === 'th' ? '45°' : '45°'}</span>
-            </button>
-            <button
-              onClick={() => {
-                const next = !isAutoOrbiting;
-                setIsAutoOrbiting(next);
-                isAutoOrbitingRef.current = next;
-              }}
-              className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg transition-colors font-bold flex items-center gap-1 cursor-pointer ${
-                isAutoOrbiting
-                  ? 'bg-amber-400 text-slate-950 shadow-2xs'
-                  : 'text-slate-700 hover:bg-slate-100'
-              }`}
-              title={lang === 'th' ? 'หมุนชม 360° อัตโนมัติ' : 'Auto 360° orbit'}
-            >
-              <RotateCcw className={`w-3 h-3 ${isAutoOrbiting ? 'animate-spin text-slate-900' : 'text-amber-600'}`} />
-              <span>{lang === 'th' ? 'หมุน 360°' : '360°'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Smart Agri IoT Telemetry Card: Clean Light Theme Docked neatly below buttons */}
-        {show5GNodes && (
-          <div className="absolute top-[88px] left-3 right-3 sm:left-auto sm:right-4 sm:top-[76px] z-30 bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-3 sm:p-3.5 text-slate-900 max-w-none sm:max-w-xs shadow-xl space-y-2 animate-fade-in">
-            <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-bold text-xs tracking-tight text-slate-900">
-                  {lang === 'th' ? 'สถานีเซนเซอร์วัดค่าไร่นา IoT' : 'Smart Agri IoT Station'}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[9px] font-mono bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
-                  Latency: 4ms
-                </span>
-                <button
-                  onClick={() => setShow5GNodes(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                  aria-label="Close sensor card"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Node Switcher Tabs */}
-            <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl text-[10px] sm:text-[11px] font-semibold text-center">
-              <button
-                onClick={() => setSelected5GNode('node-1')}
-                className={`py-1 rounded-lg transition-colors cursor-pointer ${
-                  selected5GNode === 'node-1'
-                    ? 'bg-white text-emerald-800 shadow-2xs border border-slate-200/80 font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {lang === 'th' ? 'ดิน & NPK' : 'Soil'}
-              </button>
-              <button
-                onClick={() => setSelected5GNode('node-2')}
-                className={`py-1 rounded-lg transition-colors cursor-pointer ${
-                  selected5GNode === 'node-2'
-                    ? 'bg-white text-emerald-800 shadow-2xs border border-slate-200/80 font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {lang === 'th' ? 'อากาศ' : 'Weather'}
-              </button>
-              <button
-                onClick={() => setSelected5GNode('node-3')}
-                className={`py-1 rounded-lg transition-colors cursor-pointer ${
-                  selected5GNode === 'node-3'
-                    ? 'bg-white text-emerald-800 shadow-2xs border border-slate-200/80 font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {lang === 'th' ? 'ระบบน้ำ' : 'Water'}
-              </button>
-            </div>
-
-            {/* Node Live Readings */}
-            <div className="text-[11px] sm:text-xs space-y-1.5 pt-0.5 font-mono">
-              {selected5GNode === 'node-1' && (
-                <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">ความชื้นในดิน:</span>
-                    <span className="text-emerald-700 font-bold">68.4% (เหมาะสม)</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">ค่าความเป็นกรด-ด่าง (pH):</span>
-                    <span className="text-slate-800 font-bold">6.5 pH (ดินดี)</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">ธาตุอาหาร N-P-K:</span>
-                    <span className="text-amber-700 font-bold">85 - 42 - 120 ppm</span>
-                  </div>
-                </>
-              )}
-
-              {selected5GNode === 'node-2' && (
-                <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">อุณหภูมิอากาศ:</span>
-                    <span className="text-amber-700 font-bold">31.2 °C</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">ความชื้นสัมพัทธ์ (RH):</span>
-                    <span className="text-sky-700 font-bold">74%</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">ความเข้มแสงแดด:</span>
-                    <span className="text-amber-700 font-bold">820 W/m²</span>
-                  </div>
-                </>
-              )}
-
-              {selected5GNode === 'node-3' && (
-                <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">ระดับน้ำในคูสระ:</span>
-                    <span className="text-sky-700 font-bold">28 ซม. (ปกติ)</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">วาล์วน้ำหยดอัตโนมัติ:</span>
-                    <span className="text-emerald-700 font-bold">ทำงานอยู่ (Auto)</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">ประหยัดน้ำสะสม:</span>
-                    <span className="text-teal-700 font-bold">35%</span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="text-[10px] text-slate-500 border-t border-slate-100 pt-1.5 flex items-center justify-between">
-              <span>โครงข่ายเซนเซอร์เกษตรดิจิทัล (Smart Agri)</span>
-              <span className="text-emerald-700 font-semibold">● Online 100%</span>
-            </div>
-          </div>
-        )}
-
-        {/* 3D Tree Individual Telemetry Inspector Card (Interactive Drill-down) */}
-        {inspectedTree && (
-          <div className="absolute bottom-20 left-3 sm:left-4 z-30 bg-white/95 backdrop-blur-md border border-amber-300/80 rounded-2xl p-3.5 sm:p-4 text-slate-900 w-[280px] sm:w-[320px] shadow-2xl space-y-2.5 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-2 border-b border-amber-100">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-400 to-emerald-600 flex items-center justify-center text-white shadow-xs">
-                  <Trees className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-extrabold text-xs text-slate-900">{inspectedTree.id}</span>
-                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-full">
-                      แถว {inspectedTree.row} ต้นที่ {inspectedTree.col}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-medium">
-                    {lang === 'th' ? inspectedTree.varietyTh : inspectedTree.varietyEn}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  setInspectedTree(null);
-                  if (selectionRingRef.current) selectionRingRef.current.visible = false;
-                }}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                aria-label="Close tree inspector"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Tree Specs & Telemetry Grid */}
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-              <div className="bg-amber-50/80 p-2 rounded-xl border border-amber-200/70">
-                <span className="text-[10px] text-slate-500 block font-sans font-medium">
-                  {lang === 'th' ? 'ผลผลิตบนต้นจริง' : 'Fruit Count'}
-                </span>
-                <span className="text-sm font-extrabold text-amber-900">
-                  {inspectedTree.fruitCount} {lang === 'th' ? 'ผล' : 'fruits'}
-                </span>
-                <span className="text-[9.5px] text-emerald-700 block font-sans">
-                  ห่อถุงคาร์บอน {inspectedTree.baggedRatioPct}%
-                </span>
-              </div>
-
-              <div className="bg-emerald-50/80 p-2 rounded-xl border border-emerald-200/70">
-                <span className="text-[10px] text-slate-500 block font-sans font-medium">
-                  {lang === 'th' ? 'มูลค่าประเมินหลักทรัพย์' : 'Asset Appraisal'}
-                </span>
-                <span className="text-sm font-extrabold text-emerald-800">
-                  ฿{inspectedTree.estimatedValueThb.toLocaleString()}
-                </span>
-                <span className="text-[9.5px] text-slate-500 block font-sans">
-                  อิงเกณฑ์ พ.ร.บ.หลักประกันฯ
-                </span>
-              </div>
-            </div>
-
-            {/* Tree Bio-Health Readings */}
-            <div className="space-y-1.5 text-[11px] font-mono bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/70">
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500 flex items-center gap-1 font-sans">
-                  <HeartPulse className="w-3 h-3 text-rose-500" />
-                  {lang === 'th' ? 'คะแนนสุขภาพต้น:' : 'Health Score:'}
-                </span>
-                <span className="font-bold text-emerald-700">{inspectedTree.healthScore}% (สมบูรณ์มาก)</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500 flex items-center gap-1 font-sans">
-                  <Activity className="w-3 h-3 text-emerald-600" />
-                  {lang === 'th' ? 'ดัชนีคลอโรฟิลล์ (NDVI):' : 'Chlorophyll (NDVI):'}
-                </span>
-                <span className="font-bold text-slate-800">{inspectedTree.chlorophyllIndex} (ใบเขียวเข้ม)</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500 flex items-center gap-1 font-sans">
-                  <Droplets className="w-3 h-3 text-sky-500" />
-                  {lang === 'th' ? 'ความชื้นโคนต้น:' : 'Root Moisture:'}
-                </span>
-                <span className="font-bold text-sky-700">{inspectedTree.soilMoisturePct}%</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500 font-sans">{lang === 'th' ? 'ทรงพุ่ม / ความสูง:' : 'Canopy / Height:'}</span>
-                <span className="font-bold text-slate-700">{inspectedTree.canopyDiameterM}m / {inspectedTree.heightM}m</span>
-              </div>
-            </div>
-
-            {/* View Perspectives & Unobstructed Inspection Modes */}
-            <div className="space-y-1.5 pt-1">
-              <div className="flex items-center justify-between text-[10px] text-slate-500 font-sans">
-                <span className="font-semibold">{lang === 'th' ? 'มุมมองเจาะลึก (ไม่ถูกต้นอื่นบัง):' : 'Unobstructed View Angle:'}</span>
-                <button
-                  onClick={() => setXrayIsolation(!xrayIsolation)}
-                  className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors cursor-pointer ${
-                    xrayIsolation
-                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                  title={lang === 'th' ? 'เปิด/ปิดการพรางต้นรอบข้างเพื่อมองทะลุต้นด้านใน' : 'Toggle X-Ray ghosting on neighbor trees'}
-                >
-                  <EyeOff className="w-3 h-3 text-amber-700" />
-                  <span>{lang === 'th' ? (xrayIsolation ? 'X-Ray เปิดอยู่' : 'เปิด X-Ray') : 'X-Ray'}</span>
-                </button>
-              </div>
-
-              {/* 3 Dedicated View Modes */}
-              <div className="grid grid-cols-3 gap-1">
-                <button
-                  onClick={() => focusOnTree(inspectedTree, 'canopy')}
-                  className={`py-1.5 px-1 rounded-lg text-[10.5px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer border ${
-                    cameraViewAngle === 'canopy'
-                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-2xs'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80'
-                  }`}
-                >
-                  <Navigation className="w-3 h-3" />
-                  <span>{lang === 'th' ? 'ทรงพุ่ม 55°' : 'Canopy 55°'}</span>
-                </button>
-
-                <button
-                  onClick={() => focusOnTree(inspectedTree, 'fruits')}
-                  className={`py-1.5 px-1 rounded-lg text-[10.5px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer border ${
-                    cameraViewAngle === 'fruits'
-                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-2xs'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80'
-                  }`}
-                >
-                  <Focus className="w-3 h-3" />
-                  <span>{lang === 'th' ? 'ช่อผล & ถุงห่อ' : 'Fruit Bags'}</span>
-                </button>
-
-                <button
-                  onClick={() => focusOnTree(inspectedTree, 'trunk')}
-                  className={`py-1.5 px-1 rounded-lg text-[10.5px] font-bold flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer border ${
-                    cameraViewAngle === 'trunk'
-                      ? 'bg-teal-700 text-white border-teal-600 shadow-2xs'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80'
-                  }`}
-                >
-                  <Waves className="w-3 h-3" />
-                  <span>{lang === 'th' ? 'โคนต้น & ดิน' : 'Trunk/Soil'}</span>
-                </button>
-              </div>
-
-              {/* Bottom helper row: Reset overview, 360 Orbit & Audit */}
-              <div className="flex items-center gap-1.5 pt-0.5">
-                <button
-                  onClick={resetOverviewCamera}
-                  className="flex-1 py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-[10.5px] flex items-center justify-center gap-1 transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="w-3 h-3 text-slate-500" />
-                  <span>{lang === 'th' ? 'ภาพรวม' : 'Reset View'}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    const next = !isAutoOrbiting;
-                    setIsAutoOrbiting(next);
-                    isAutoOrbitingRef.current = next;
-                  }}
-                  className={`py-1.5 px-2 font-bold rounded-lg text-[10.5px] flex items-center justify-center gap-1 transition-colors cursor-pointer border ${
-                    isAutoOrbiting
-                      ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-2xs'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80'
-                  }`}
-                  title={lang === 'th' ? 'หมุนชมต้นนี้รอบทิศ 360°' : 'Auto 360° orbit'}
-                >
-                  <RotateCcw className={`w-3 h-3 ${isAutoOrbiting ? 'animate-spin text-slate-950' : 'text-slate-500'}`} />
-                  <span>{lang === 'th' ? (isAutoOrbiting ? 'กำลังหมุน' : 'หมุน 360°') : '360°'}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (selectionRingRef.current) {
-                      selectionRingRef.current.scale.set(3, 3, 1);
-                      setTimeout(() => {
-                        if (selectionRingRef.current) {
-                          selectionRingRef.current.scale.set(
-                            inspectedTree.canopyDiameterM * 0.42,
-                            inspectedTree.canopyDiameterM * 0.42,
-                            1
-                          );
-                        }
-                      }, 250);
-                    }
-                  }}
-                  className="py-1.5 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-lg text-[10.5px] flex items-center gap-1 cursor-pointer"
-                >
-                  <Sparkles className="w-3 h-3 text-amber-500" />
-                  <span>{lang === 'th' ? 'ตรวจซ้ำ' : 'Audit'}</span>
-                </button>
-              </div>
-
-              {/* Free Camera Movement Hint */}
-              <div className="text-[9.5px] text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200/70 font-sans text-center">
-                {lang === 'th' ? 'คลิกเมาส์ซ้ายลากหมุน • ขวาลากแพน • สกอลล์ซูมเข้าออกได้อย่างอิสระ' : 'Left-drag to orbit • Right-drag to pan • Scroll to zoom'}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Collapsible Unified Bottom Control Dock (Clean Light Theme) */}
-        <div
-          className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-[94%] max-w-4xl transition-all duration-300 ease-in-out ${
-            isDockCollapsed ? 'translate-y-[calc(100%-36px)]' : 'translate-y-0'
-          }`}
-        >
-          <div className="flex justify-center -mb-px">
-            <button
-              onClick={() => setIsDockCollapsed(!isDockCollapsed)}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-t-xl bg-white/95 text-slate-700 text-xs font-semibold border-t border-x border-slate-200/90 shadow-xs hover:bg-slate-50 transition-colors cursor-pointer"
-            >
-              {isDockCollapsed ? (
-                <>
-                  <ChevronUp className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{lang === 'th' ? 'แสดงแผงควบคุมการเติบโต' : 'Show Controls'}</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{lang === 'th' ? 'ย่อแผงควบคุม' : 'Hide Controls'}</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-4 text-slate-900 shadow-xl space-y-3">
-            {/* Timeline Growth Scrubber (3, 5, 10 Years as requested!) */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-700 font-semibold flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{lang === 'th' ? 'จำลองการเจริญเติบโตในอนาคต:' : 'Future Timeline Simulation:'}</span>
-                  <span className="text-emerald-700 font-bold font-mono text-sm">
-                    {timelineYear === 0
-                      ? lang === 'th' ? 'ปีที่ 0 (เริ่มลงกล้า)' : 'Year 0 (Sapling)'
-                      : lang === 'th'
-                      ? `ปีที่ ${timelineYear} (${timelineYear >= crop.yearsToFirstHarvest ? 'ระยะให้ผลผลิตเต็มที่' : 'ระยะสะสมอาหาร'})`
-                      : `Year ${timelineYear} (${timelineYear >= crop.yearsToFirstHarvest ? 'Full Bearing' : 'Vegetative'})`}
-                  </span>
-                </span>
-
-                <span className="text-[11px] text-slate-500">
-                  {lang === 'th' ? 'กดเลือก 3, 5 หรือ 10 ปีเพื่อดูขนาดต้นและผลผลิต' : 'Select 3, 5, or 10 years'}
-                </span>
-              </div>
-
-              {/* Segmented Timeline Buttons with 3, 5, 10 Years Priority */}
-              <div className="flex items-center gap-2">
-                <div className="flex-1 grid grid-cols-5 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
-                  {[0, 1, 3, 5, 10].map((yr) => (
-                    <button
-                      key={yr}
-                      onClick={() => {
-                        setTimelineYear(yr);
-                        setIsPlaying(false);
-                      }}
-                      className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                        timelineYear === yr
-                          ? 'bg-emerald-600 text-white shadow-2xs font-bold'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                      }`}
-                    >
-                      {yr === 0 ? (lang === 'th' ? 'เริ่มปลูก' : 'Yr 0') : `${yr} ${lang === 'th' ? 'ปี' : 'Yrs'}`}
-                    </button>
-                  ))}
+                  <button
+                    onClick={() => setSelected5GNode('node-2')}
+                    className={`py-1.5 rounded-lg transition-colors cursor-pointer min-h-[36px] ${
+                      selected5GNode === 'node-2' ? 'bg-white text-emerald-800 shadow-2xs font-bold' : 'text-slate-600'
+                    }`}
+                  >
+                    {lang === 'th' ? 'อากาศ' : 'Weather'}
+                  </button>
+                  <button
+                    onClick={() => setSelected5GNode('node-3')}
+                    className={`py-1.5 rounded-lg transition-colors cursor-pointer min-h-[36px] ${
+                      selected5GNode === 'node-3' ? 'bg-white text-emerald-800 shadow-2xs font-bold' : 'text-slate-600'
+                    }`}
+                  >
+                    {lang === 'th' ? 'ระบบน้ำ' : 'Water'}
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    isPlaying
-                      ? 'bg-amber-100 border-amber-300 text-amber-800 animate-pulse'
-                      : 'bg-white border-slate-200 text-emerald-700 hover:bg-slate-50'
-                  }`}
-                >
-                  {isPlaying ? (
+                {/* Node Live Readings */}
+                <div className="text-[11px] sm:text-xs space-y-1 pt-0.5 font-mono">
+                  {selected5GNode === 'node-1' && (
                     <>
-                      <Pause className="w-3.5 h-3.5" />
-                      <span>{lang === 'th' ? 'หยุด' : 'Pause'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-3.5 h-3.5" />
-                      <span>{lang === 'th' ? 'เล่นจำลอง' : 'Auto-Play'}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">ความชื้นดิน:</span>
+                        <span className="text-emerald-700 font-bold">68.4% (ดี)</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">ค่า pH:</span>
+                        <span className="text-slate-800 font-bold">6.5 pH</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">N-P-K:</span>
+                        <span className="text-amber-700 font-bold">85-42-120 ppm</span>
+                      </div>
                     </>
                   )}
-                </button>
+
+                  {selected5GNode === 'node-2' && (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">อุณหภูมิ:</span>
+                        <span className="text-amber-700 font-bold">31.2 °C</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">ความชื้นสัมพัทธ์:</span>
+                        <span className="text-sky-700 font-bold">74%</span>
+                      </div>
+                    </>
+                  )}
+
+                  {selected5GNode === 'node-3' && (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">ระดับน้ำในคู:</span>
+                        <span className="text-sky-700 font-bold">28 ซม.</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">วาล์วน้ำหยด:</span>
+                        <span className="text-emerald-700 font-bold">ทำงานอัตโนมัติ</span>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
+            )}
+
+            {/* Floating Mobile On-Screen D-Pad & Camera Controls (Bottom Right) */}
+            <div className="absolute bottom-16 right-3 sm:bottom-20 sm:right-4 z-20 flex flex-col items-center gap-1.5">
+              <button
+                onClick={handleZoomIn}
+                className="w-10 h-10 rounded-2xl bg-white/95 text-slate-800 border border-slate-200/90 shadow-lg flex items-center justify-center font-bold text-lg hover:bg-white active:scale-95 transition-all cursor-pointer"
+                title="Zoom In"
+                aria-label="Zoom in 3D scene"
+              >
+                <ZoomIn className="w-5 h-5 text-emerald-700" />
+              </button>
+
+              <button
+                onClick={handleZoomOut}
+                className="w-10 h-10 rounded-2xl bg-white/95 text-slate-800 border border-slate-200/90 shadow-lg flex items-center justify-center font-bold text-lg hover:bg-white active:scale-95 transition-all cursor-pointer"
+                title="Zoom Out"
+                aria-label="Zoom out 3D scene"
+              >
+                <ZoomOut className="w-5 h-5 text-emerald-700" />
+              </button>
+
+              <button
+                onClick={resetOverviewCamera}
+                className="w-10 h-10 rounded-2xl bg-white/95 text-slate-800 border border-slate-200/90 shadow-lg flex items-center justify-center hover:bg-white active:scale-95 transition-all cursor-pointer"
+                title="Reset Camera View"
+                aria-label="Reset camera view"
+              >
+                <RotateCcw className="w-4 h-4 text-sky-700" />
+              </button>
+
+              <button
+                onClick={() => {
+                  const next = !isAutoOrbiting;
+                  setIsAutoOrbiting(next);
+                  isAutoOrbitingRef.current = next;
+                }}
+                className={`w-10 h-10 rounded-2xl border shadow-lg flex items-center justify-center active:scale-95 transition-all cursor-pointer ${
+                  isAutoOrbiting
+                    ? 'bg-amber-400 border-amber-300 text-slate-950'
+                    : 'bg-white/95 border-slate-200/90 text-slate-800 hover:bg-white'
+                }`}
+                title="Auto 360° Orbit"
+                aria-label="Auto 360 orbit"
+              >
+                <RotateCcw className={`w-4 h-4 ${isAutoOrbiting ? 'animate-spin text-slate-950' : 'text-amber-600'}`} />
+              </button>
             </div>
 
-            {/* Farm Telemetry */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-xs">
-              <div className="bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
-                <span className="text-[10px] text-slate-500 block font-semibold">
-                  {lang === 'th' ? 'ขนาดทรงพุ่มเฉลี่ย' : 'Canopy Diameter'}
-                </span>
-                <span className="text-sm font-bold text-emerald-700 font-mono tabular-nums">
-                  {canopyDiameterMeters} {lang === 'th' ? 'เมตร' : 'm'}
-                </span>
+            {/* Mobile Touch Gesture Guidance Toast (Fades quietly) */}
+            <div className="absolute bottom-2 left-3 z-10 hidden xs:flex items-center gap-1.5 bg-slate-900/80 backdrop-blur-md text-slate-200 text-[10px] px-2.5 py-1 rounded-xl border border-slate-700/60 font-mono">
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              <span>แตะลากด้วย 1 นิ้วเพื่อหมุน • 2 นิ้วเพื่อซูม</span>
+            </div>
+          </div>
+
+          {/* Mobile Bottom Sheet Drawer for Tree Inspection Details */}
+          {inspectedTree && (
+            <div className="fixed sm:absolute inset-x-0 bottom-0 sm:bottom-20 sm:left-4 z-50 bg-white/98 backdrop-blur-xl border-t-2 sm:border border-amber-300 rounded-t-3xl sm:rounded-2xl p-4 text-slate-900 w-full sm:w-[320px] shadow-2xl space-y-3 max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom duration-200">
+              {/* Mobile Sheet Grab Handle */}
+              <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto sm:hidden -mt-1 mb-1" />
+
+              <div className="flex items-center justify-between pb-2 border-b border-amber-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-emerald-600 flex items-center justify-center text-white shadow-xs">
+                    <Trees className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-extrabold text-sm text-slate-900">{inspectedTree.id}</span>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                        แถว {inspectedTree.row} ต้นที่ {inspectedTree.col}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium">
+                      {lang === 'th' ? inspectedTree.varietyTh : inspectedTree.varietyEn}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setInspectedTree(null);
+                    if (selectionRingRef.current) selectionRingRef.current.visible = false;
+                  }}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label="Close tree inspector"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              <div className="bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
-                <span className="text-[10px] text-slate-500 block font-semibold">
-                  {lang === 'th' ? 'ผลผลิตคาดการณ์รวม' : 'Estimated Harvest'}
-                </span>
-                <span className="text-sm font-bold text-amber-700 font-mono tabular-nums">
-                  {projectedHarvestTons} {lang === 'th' ? 'ตัน/ปี' : 'tons/yr'}
-                </span>
+              {/* Tree Specs & Telemetry Grid */}
+              <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                <div className="bg-amber-50/90 p-2.5 rounded-xl border border-amber-200">
+                  <span className="text-[10px] text-slate-500 block font-sans font-medium">
+                    {lang === 'th' ? 'ผลผลิตบนต้นจริง' : 'Fruit Count'}
+                  </span>
+                  <span className="text-base font-extrabold text-amber-900">
+                    {inspectedTree.fruitCount} {lang === 'th' ? 'ผล' : 'fruits'}
+                  </span>
+                  <span className="text-[10px] text-emerald-700 block font-sans font-semibold">
+                    ห่อถุงคาร์บอน {inspectedTree.baggedRatioPct}%
+                  </span>
+                </div>
+
+                <div className="bg-emerald-50/90 p-2.5 rounded-xl border border-emerald-200">
+                  <span className="text-[10px] text-slate-500 block font-sans font-medium">
+                    {lang === 'th' ? 'มูลค่าประเมินหลักทรัพย์' : 'Asset Appraisal'}
+                  </span>
+                  <span className="text-base font-extrabold text-emerald-800">
+                    ฿{inspectedTree.estimatedValueThb.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] text-slate-500 block font-sans">
+                    อิงเกณฑ์ พ.ร.บ.หลักประกันฯ
+                  </span>
+                </div>
               </div>
 
-              <div className="bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
-                <span className="text-[10px] text-slate-500 block font-semibold">
-                  {lang === 'th' ? 'การใช้น้ำต่อวัน' : 'Water Need'}
-                </span>
-                <span className="text-sm font-bold text-sky-700 font-mono tabular-nums">
-                  {crop.waterRequirement === 'high' ? '120-150 L/ต้น' : '40-60 L/ต้น'}
-                </span>
+              {/* Tree Bio-Health Readings */}
+              <div className="space-y-1.5 text-xs font-mono bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1 font-sans">
+                    <HeartPulse className="w-3.5 h-3.5 text-rose-500" />
+                    {lang === 'th' ? 'คะแนนสุขภาพต้น:' : 'Health Score:'}
+                  </span>
+                  <span className="font-bold text-emerald-700">{inspectedTree.healthScore}% (สมบูรณ์มาก)</span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1 font-sans">
+                    <Activity className="w-3.5 h-3.5 text-emerald-600" />
+                    {lang === 'th' ? 'ดัชนีคลอโรฟิลล์ (NDVI):' : 'Chlorophyll (NDVI):'}
+                  </span>
+                  <span className="font-bold text-slate-800">{inspectedTree.chlorophyllIndex} (ใบเขียวเข้ม)</span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 flex items-center gap-1 font-sans">
+                    <Droplets className="w-3.5 h-3.5 text-sky-500" />
+                    {lang === 'th' ? 'ความชื้นโคนต้น:' : 'Root Moisture:'}
+                  </span>
+                  <span className="font-bold text-sky-700">{inspectedTree.soilMoisturePct}%</span>
+                </div>
               </div>
 
-              <div className="bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80">
-                <span className="text-[10px] text-slate-500 block font-semibold">
-                  {lang === 'th' ? 'ระยะการให้ผลผลิต' : 'Bearing Stage'}
-                </span>
-                <span className="text-sm font-bold text-slate-800">
-                  {timelineYear < crop.yearsToFirstHarvest
-                    ? lang === 'th' ? 'สะสมอาหาร' : 'Pre-bearing'
-                    : lang === 'th' ? 'เก็บเกี่ยวสมบูรณ์' : 'Full Production'}
-                </span>
+              {/* View Perspectives & Touch Angle Mode Buttons */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between text-xs text-slate-600 font-sans">
+                  <span className="font-bold">{lang === 'th' ? 'เลือกมุมมองซูมกล้อง:' : 'Camera Angle:'}</span>
+                  <button
+                    onClick={() => setXrayIsolation(!xrayIsolation)}
+                    className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer min-h-[36px] ${
+                      xrayIsolation ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    <EyeOff className="w-3.5 h-3.5 text-amber-700" />
+                    <span>{xrayIsolation ? 'X-Ray เปิดอยู่' : 'เปิด X-Ray'}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    onClick={() => focusOnTree(inspectedTree, 'canopy')}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer border min-h-[44px] ${
+                      cameraViewAngle === 'canopy'
+                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <Navigation className="w-4 h-4" />
+                    <span>ทรงพุ่ม</span>
+                  </button>
+
+                  <button
+                    onClick={() => focusOnTree(inspectedTree, 'fruits')}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer border min-h-[44px] ${
+                      cameraViewAngle === 'fruits'
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-xs'
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <Focus className="w-4 h-4" />
+                    <span>ช่อผล</span>
+                  </button>
+
+                  <button
+                    onClick={() => focusOnTree(inspectedTree, 'trunk')}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer border min-h-[44px] ${
+                      cameraViewAngle === 'trunk'
+                        ? 'bg-teal-700 text-white border-teal-600 shadow-xs'
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <Waves className="w-4 h-4" />
+                    <span>โคนต้น</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={resetOverviewCamera}
+                    className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[40px]"
+                  >
+                    <RotateCcw className="w-4 h-4 text-slate-500" />
+                    <span>{lang === 'th' ? 'รีเซ็ตภาพรวม' : 'Reset View'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setInspectedTree(null)}
+                    className="py-2 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center cursor-pointer min-h-[40px]"
+                  >
+                    <span>{lang === 'th' ? 'ปิด' : 'Close'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Collapsible Unified Growth Timeline Control Dock */}
+          <div
+            className={`transition-all duration-300 ease-in-out ${
+              isFullscreen3D
+                ? 'absolute bottom-4 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-2xl'
+                : 'w-full'
+            }`}
+          >
+            <div className="flex justify-center -mb-px">
+              <button
+                onClick={() => setIsDockCollapsed(!isDockCollapsed)}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-t-xl bg-white/95 text-slate-700 text-xs font-semibold border-t border-x border-slate-200 shadow-xs hover:bg-slate-50 transition-colors cursor-pointer min-h-[36px]"
+              >
+                {isDockCollapsed ? (
+                  <>
+                    <ChevronUp className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{lang === 'th' ? 'แสดงแผงควบคุมการเติบโต' : 'Show Controls'}</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{lang === 'th' ? 'ย่อแผงควบคุม' : 'Hide Controls'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className={`bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-3.5 sm:p-4 text-slate-900 shadow-xl space-y-3 ${
+              isDockCollapsed ? 'hidden' : 'block'
+            }`}>
+              {/* Growth Timeline Slider */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-700 font-semibold flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{lang === 'th' ? 'จำลองการเติบโต:' : 'Timeline Growth:'}</span>
+                    <span className="text-emerald-700 font-bold font-mono text-sm">
+                      {timelineYear === 0
+                        ? lang === 'th' ? 'ปีที่ 0 (เริ่มลงกล้า)' : 'Year 0 (Sapling)'
+                        : lang === 'th'
+                        ? `ปีที่ ${timelineYear} (${timelineYear >= crop.yearsToFirstHarvest ? 'ระยะให้ผลผลิตเต็มที่' : 'ระยะสะสมอาหาร'})`
+                        : `Year ${timelineYear}`}
+                    </span>
+                  </span>
+
+                  <span className="text-[11px] text-slate-500 hidden xs:inline">
+                    {lang === 'th' ? 'เลือกปี 3, 5 หรือ 10' : 'Select 3, 5, or 10 years'}
+                  </span>
+                </div>
+
+                {/* Segmented Timeline Buttons */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 grid grid-cols-5 gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+                    {[0, 1, 3, 5, 10].map((yr) => (
+                      <button
+                        key={yr}
+                        onClick={() => {
+                          setTimelineYear(yr);
+                          setIsPlaying(false);
+                        }}
+                        className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer min-h-[40px] ${
+                          timelineYear === yr
+                            ? 'bg-emerald-600 text-white shadow-xs font-extrabold'
+                            : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
+                        }`}
+                      >
+                        {yr === 0 ? (lang === 'th' ? 'เริ่ม' : 'Yr 0') : `${yr} ${lang === 'th' ? 'ปี' : 'Yrs'}`}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer min-h-[40px] ${
+                      isPlaying
+                        ? 'bg-amber-100 border-amber-300 text-amber-800 animate-pulse'
+                        : 'bg-white border-slate-200 text-emerald-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {isPlaying ? (
+                      <>
+                        <Pause className="w-3.5 h-3.5" />
+                        <span className="hidden xs:inline">{lang === 'th' ? 'หยุด' : 'Pause'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5" />
+                        <span className="hidden xs:inline">{lang === 'th' ? 'เล่นอัตโนมัติ' : 'Auto-Play'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Farm Telemetry Stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
+                <div className="bg-slate-50 p-2 sm:p-2.5 rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-semibold">
+                    {lang === 'th' ? 'ทรงพุ่มเฉลี่ย' : 'Canopy Diameter'}
+                  </span>
+                  <span className="text-sm font-bold text-emerald-700 font-mono tabular-nums">
+                    {canopyDiameterMeters} {lang === 'th' ? 'ม.' : 'm'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-2 sm:p-2.5 rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-semibold">
+                    {lang === 'th' ? 'ผลผลิตคาดการณ์' : 'Estimated Harvest'}
+                  </span>
+                  <span className="text-sm font-bold text-amber-700 font-mono tabular-nums">
+                    {projectedHarvestTons} {lang === 'th' ? 'ตัน/ปี' : 'tons/yr'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-2 sm:p-2.5 rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-semibold">
+                    {lang === 'th' ? 'การใช้น้ำต่อวัน' : 'Water Need'}
+                  </span>
+                  <span className="text-sm font-bold text-sky-700 font-mono tabular-nums">
+                    {crop.waterRequirement === 'high' ? '120-150 L' : '40-60 L'}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-2 sm:p-2.5 rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 block font-semibold">
+                    {lang === 'th' ? 'ระยะการให้ผล' : 'Bearing Stage'}
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold text-slate-800 line-clamp-1">
+                    {timelineYear < crop.yearsToFirstHarvest
+                      ? lang === 'th' ? 'สะสมอาหาร' : 'Pre-bearing'
+                      : lang === 'th' ? 'เก็บเกี่ยวเต็มที่' : 'Full Bearing'}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+
+        {/* Mobile Quick Step Navigation Bar (Guarantees 3D Canvas is front & center on mobile phones) */}
+        <div className="md:hidden bg-white p-1.5 rounded-2xl border border-slate-200 shadow-2xs grid grid-cols-4 gap-1 text-center font-bold text-xs sticky top-14 z-20">
+          <button
+            onClick={() => setActiveMobileStep('3d_viewer')}
+            aria-label="View 3D Digital Twin"
+            className={`py-2 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-1 cursor-pointer min-h-[44px] ${
+              activeMobileStep === '3d_viewer'
+                ? 'bg-emerald-600 text-white shadow-xs font-extrabold'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Box className="w-4 h-4" />
+            <span className="text-[10px] leading-none">ดูสวน 3D</span>
+          </button>
+
+          <button
+            onClick={() => setActiveMobileStep('upload_2d')}
+            aria-label="1. รูปแปลง 2D"
+            className={`py-2 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-1 cursor-pointer min-h-[44px] ${
+              activeMobileStep === 'upload_2d'
+                ? 'bg-emerald-600 text-white shadow-xs font-extrabold'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Upload className="w-4 h-4" />
+            <span className="text-[10px] leading-none">1. รูป 2D</span>
+          </button>
+
+          <button
+            onClick={() => setActiveMobileStep('select_crop')}
+            aria-label="2. เลือกพืช"
+            className={`py-2 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-1 cursor-pointer min-h-[44px] ${
+              activeMobileStep === 'select_crop'
+                ? 'bg-emerald-600 text-white shadow-xs font-extrabold'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Sprout className="w-4 h-4" />
+            <span className="text-[10px] leading-none">2. เลือกพืช</span>
+          </button>
+
+          <button
+            onClick={() => setActiveMobileStep('disaster')}
+            aria-label="3. สภาวะวิกฤต"
+            className={`py-2 px-1 rounded-xl transition-all flex flex-col items-center justify-center gap-1 cursor-pointer min-h-[44px] ${
+              activeMobileStep === 'disaster'
+                ? 'bg-emerald-600 text-white shadow-xs font-extrabold'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span className="text-[10px] leading-none">3. วิกฤต 3D</span>
+          </button>
+        </div>
+
+        {/* STEP 1: 2D Upload Card */}
+        <div className={`bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 ${
+          activeMobileStep === 'upload_2d' ? 'block' : 'hidden md:block'
+        }`}>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  {lang === 'th' ? 'ระบบแปลงภาพ 2D สู่โมเดล 3D' : '2D Land Photo to 3D Model Engine'}
+                </span>
+                <span>·</span>
+                <span>{lang === 'th' ? 'จำลองการเติบโต 3, 5, 10 ปี' : '3, 5, 10-Year Growth Simulation'}</span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
+                {lang === 'th' ? 'แปลงรูปถ่ายแปลงที่ดิน (2D) เป็นแบบจำลองสวน 3 มิติ' : 'Convert 2D Land Photos into Interactive 3D Farm'}
+              </h2>
+              <p className="text-xs text-slate-600 mt-1">
+                {lang === 'th'
+                  ? 'อัปโหลดภาพถ่ายทางอากาศ ภาพถ่ายจากโดรน โฉนดที่ดิน หรือผังแปลง 2 มิติ เพื่อสร้างพื้นผิวภูมิประเทศและจำลองทรงพุ่มต้นไม้จริง'
+                  : 'Upload drone shots, land deeds, or satellite maps to map real terrain textures and projected tree canopies.'}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {uploaded2DImage && (
+                <button
+                  onClick={() => setShow2DInspector(!show2DInspector)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-colors cursor-pointer min-h-[44px]"
+                >
+                  <ImageIcon className="w-4 h-4 text-emerald-700" />
+                  <span>{lang === 'th' ? (show2DInspector ? 'ซ่อนภาพ 2D' : 'ดูภาพ 2D เทียบ 3D') : 'Toggle 2D/3D'}</span>
+                </button>
+              )}
+
+              <button
+                onClick={handleShare3DFarm}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer min-h-[44px]"
+              >
+                {copied3DLink ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-300" />
+                    <span>{lang === 'th' ? 'คัดลอกลิงก์ 3D แล้ว' : 'Copied 3D Link'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-4 h-4 text-emerald-200" />
+                    <span>{lang === 'th' ? 'แชร์สวน 3D' : 'Share 3D Farm'}</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveMobileStep('3d_viewer')}
+                className="md:hidden flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer min-h-[44px]"
+              >
+                <Box className="w-4 h-4 text-emerald-400" />
+                <span>{lang === 'th' ? 'ดูโมเดล 3D' : 'View 3D'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Copy Toast Banner */}
+          {copied3DLink && (
+            <div className="p-3 bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-between shadow-md animate-fade-in">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-200 shrink-0" />
+                <span>
+                  {lang === 'th'
+                    ? 'คัดลอกลิงก์แชร์สวน 3D เรียบร้อยแล้ว! สามารถนำไปส่งต่อให้ผู้อื่นเปิดดูได้ทันที'
+                    : '3D Farm View link copied to clipboard! Anyone can open it directly.'}
+                </span>
+              </div>
+              <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-mono">Public Link</span>
+            </div>
+          )}
+
+          {/* Prominent 2D Upload Card / Dropzone */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Main Upload Button / Dropzone */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="md:col-span-1 border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50/80 rounded-2xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group min-h-[120px]"
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleCustomImageUpload}
+                className="hidden"
+              />
+              <div className="w-11 h-11 rounded-xl bg-emerald-600 group-hover:bg-emerald-700 text-white flex items-center justify-center shadow-xs transition-colors">
+                <Upload className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-900 group-hover:text-emerald-800 block">
+                  {lang === 'th' ? 'อัปโหลดรูปแปลง 2D ของท่าน' : 'Upload Your 2D Land Image'}
+                </span>
+                <span className="text-[11px] text-slate-500 block mt-0.5">
+                  {lang === 'th' ? 'รองรับภาพโดรน, ดาวเทียม, หรือโฉนด' : 'Supports drone, satellite, or aerial photos'}
+                </span>
+              </div>
+              {activePresetId === 'custom' && (
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+                  {lang === 'th' ? 'ใช้งานภาพของคุณอยู่' : 'Active Custom Image'}
+                </span>
+              )}
+            </div>
+
+            {/* 3 Realistic Thai 2D Land Presets */}
+            <div className="md:col-span-2 space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                {lang === 'th' ? 'หรือทดลองคลิกเลือกภาพถ่ายแปลงตัวอย่างของไทย (1-Click Presets):' : 'Or Try Realistic Thai 2D Presets:'}
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {LAND_MAP_PRESETS.map((preset) => {
+                  const isSelected = activePresetId === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      onClick={() => {
+                        handleSelectPreset(preset);
+                        setActiveMobileStep('3d_viewer');
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-2.5 min-h-[52px] ${
+                        isSelected
+                          ? 'border-emerald-600 bg-emerald-50/70 shadow-xs ring-1 ring-emerald-500'
+                          : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div
+                        className="w-8 h-8 rounded-lg shrink-0 mt-0.5 flex items-center justify-center text-white text-xs font-bold shadow-xs"
+                        style={{ backgroundColor: preset.previewColor }}
+                      >
+                        2D
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 line-clamp-1 block">
+                          {lang === 'th' ? preset.titleThai : preset.titleEnglish}
+                        </span>
+                        <span className="text-[10px] text-slate-500 line-clamp-1 mt-0.5 block">
+                          {preset.descriptionThai}
+                        </span>
+                        {isSelected && (
+                          <span className="text-[9px] font-bold text-emerald-700 block mt-1">
+                            ● {lang === 'th' ? 'ฉายลงโมเดล 3D อยู่' : 'Projected on 3D'}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* STEP 2: Choose What to Plant Card */}
+        <div className={`bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3 ${
+          activeMobileStep === 'select_crop' ? 'block' : 'hidden md:block'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-0.5">
+                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">ขั้นตอนที่ 2</span>
+                <span>{lang === 'th' ? 'เลือกพืชที่ต้องการปลูกบนแปลงนี้' : 'Select Crop to Plant & Simulate'}</span>
+              </div>
+              <h3 className="text-base font-bold text-slate-900">
+                {lang === 'th' ? 'ท่านต้องการปลูกพืชเศรษฐกิจชนิดใด?' : 'Which Crop Would You Like to Plant?'}
+              </h3>
+            </div>
+
+            <button
+              onClick={() => {
+                setSelectedCrop(pendingCrop);
+                setHasSimulated(true);
+                setActiveMobileStep('3d_viewer');
+              }}
+              className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-xs cursor-pointer transition-colors min-h-[44px]"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>{lang === 'th' ? 'เริ่มจำลองแปลงปลูก & ดูโมเดล 3D' : 'Simulate & Predict 3D Farm'}</span>
+            </button>
+          </div>
+
+          {/* 6 Core Thai Economic Crops Quick-Selector */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            {Object.values(CROPS).map((c) => {
+              const isSelected = pendingCrop === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setPendingCrop(c.id);
+                    setSelectedCrop(c.id);
+                    setHasSimulated(true);
+                  }}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between min-h-[64px] ${
+                    isSelected
+                      ? 'border-emerald-600 bg-emerald-50/80 ring-2 ring-emerald-500 shadow-xs'
+                      : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c.color }} />
+                      <span className="text-[10px] font-bold text-slate-500 font-mono">
+                        ฿{c.currentPrice}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-slate-900 line-clamp-1 block">
+                      {lang === 'th' ? c.nameThai.split('(')[0] : c.nameEnglish.split('(')[0]}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    {c.id === 'rice' ? 'ผลผลิตต่อรอบ 4 เดือน' : `ให้ผลผลิตปีที่ ${c.yearsToFirstHarvest}`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* STEP 3: Crisis Scenarios Card */}
+        <div className={`bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3 ${
+          activeMobileStep === 'disaster' ? 'block' : 'hidden md:block'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-0.5">
+                <span className="font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-md">ขั้นตอนที่ 3</span>
+                <span>{lang === 'th' ? 'แบบจำลองสภาวะวิกฤต & มาตรการป้องกัน 3D' : '3D Climate Disaster Simulation & Defense'}</span>
+              </div>
+              <h3 className="text-base font-bold text-slate-900">
+                {lang === 'th' ? 'ทำนายความเสี่ยงสภาพอากาศ & ออกแบบวิธีป้องกันในโมเดล 3D' : 'Predict Weather Risks & Build 3D Defenses'}
+              </h3>
+            </div>
+
+            {/* Scenario Selector Pills */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-auto">
+              <button
+                onClick={() => setRiskScenario('normal')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer min-h-[36px] ${
+                  riskScenario === 'normal'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {lang === 'th' ? 'ปกติ' : 'Normal'}
+              </button>
+              <button
+                onClick={() => setRiskScenario('flood')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer min-h-[36px] ${
+                  riskScenario === 'flood'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {lang === 'th' ? 'เสี่ยงน้ำท่วม' : 'Flood'}
+              </button>
+              <button
+                onClick={() => setRiskScenario('drought')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer min-h-[36px] ${
+                  riskScenario === 'drought'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {lang === 'th' ? 'เสี่ยงภัยแล้ง' : 'Drought'}
+              </button>
+            </div>
+          </div>
+
+          {/* Dynamic Scenario Explanation & 3D Interactive Defense Action */}
+          {riskScenario === 'normal' && (
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs text-emerald-950">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  {lang === 'th'
+                    ? 'สภาพอากาศปกติ ดินมีความชื้นเหมาะสม ทรงพุ่มเขียวชอุ่ม ให้ผลผลิตได้เต็ม 100%'
+                    : 'Normal climate conditions. Soil moisture is optimal and plants are thriving at 100% yield potential.'}
+                </span>
+              </div>
+              <span className="font-bold text-emerald-700 shrink-0 font-mono">ผลผลิต 100%</span>
+            </div>
+          )}
+
+          {riskScenario === 'flood' && (
+            <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="space-y-1">
+                  <span className="font-bold text-blue-900 block text-sm">
+                    {hasFloodDefense
+                      ? lang === 'th' ? 'ระบบคันดินกั้นน้ำและคูระบายน้ำปกป้องแปลงสำเร็จ' : 'Earthen Dyke & Moat Defenses Active'
+                      : lang === 'th' ? 'เกิดภาวะน้ำท่วมขังสูง 40 ซม. เสี่ยงสูญเสียผลผลิต 75%' : '40cm Flood Inundation! 75% Yield Loss Risk'}
+                  </span>
+                  <p className="text-slate-600 text-[11px] leading-relaxed max-w-xl">
+                    {hasFloodDefense
+                      ? lang === 'th'
+                        ? 'โมเดล 3D ได้ยกคันดินกั้นน้ำสูง 1.3 เมตรรอบแปลง 4 ด้าน พร้อมเปิดคูระบายน้ำ น้ำท่วมถูกสกัดกั้นอยู่นอกแปลง ต้นไม้รอดตายปลอดภัย 95%'
+                        : '3D raised berms around perimeter stop flooding. Water channeled into drainage ditch.'
+                      : lang === 'th'
+                        ? 'ระดับน้ำท่วมท่วมคลุมโคนต้นไม้ รากขาดออกซิเจน เสี่ยงโรครากเน่าโคนเน่า (ไฟทอปธอรา) ใบเปลี่ยนเป็นสีเหลือง ยืนต้นตายใน 14 วัน'
+                        : 'Standing water suffocates root collars. Leaves yellow and die within 14 days without drainage.'}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setHasFloodDefense(!hasFloodDefense)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer shrink-0 min-h-[44px] ${
+                    hasFloodDefense
+                      ? 'bg-blue-700 text-white ring-2 ring-blue-400'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4 text-blue-200" />
+                  <span>
+                    {hasFloodDefense
+                      ? lang === 'th' ? 'ยกคันดินกั้นน้ำแล้ว (กดเพื่อปลด)' : 'Dykes Built (Click to remove)'
+                      : lang === 'th' ? 'สร้างคันดินกั้นน้ำ & ขุดคูน้ำ 3D' : 'Build 3D Flood Dykes & Moat'}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {riskScenario === 'drought' && (
+            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="space-y-1">
+                  <span className="font-bold text-amber-900 block text-sm">
+                    {hasDroughtDefense
+                      ? lang === 'th' ? 'สระกักเก็บน้ำโคกหนองนา & ระบบน้ำหยดหล่อเลี้ยงแปลงสำเร็จ' : 'Retention Pond & Drip Irrigation Grid Active'
+                      : lang === 'th' ? 'ฝนทิ้งช่วง 45 วัน ดินแตกระแหง ดอกและผลอ่อนร่วงหล่น' : '45-Day Severe Drought! 65% Yield Loss Risk'}
+                  </span>
+                  <p className="text-slate-600 text-[11px] leading-relaxed max-w-xl">
+                    {hasDroughtDefense
+                      ? lang === 'th'
+                        ? 'โมเดล 3D มีสระกักเก็บน้ำลึกโคกหนองนา และเดินท่อน้ำหยด HDPE สีดำพาดผ่านทุกแถว ดินชุ่มชื้น ต้นไม้กลับมาเขียวสดใส ผลผลิตสมบูรณ์ 95%'
+                        : '3D retention pond and micro-drip feeder tubes supply water along all planting rows.'
+                      : lang === 'th'
+                        ? 'ดินแตกระแหง สระน้ำแห้งเหือด ทรงพุ่มเหี่ยวเฉา ดอกและผลทุเรียน/ผลไม้ร่วงหล่น ผลผลิตลดลงกว่า 65%'
+                        : 'Severe water deficit causes flower & fruit drop. Parched earth texture.'}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setHasDroughtDefense(!hasDroughtDefense)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer shrink-0 min-h-[44px] ${
+                    hasDroughtDefense
+                      ? 'bg-amber-700 text-white ring-2 ring-amber-400'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
+                >
+                  <Droplets className="w-4 h-4 text-amber-200" />
+                  <span>
+                    {hasDroughtDefense
+                      ? lang === 'th' ? 'ขุดสระ & เดินท่อน้ำหยดแล้ว' : 'Pond & Drip Built'
+                      : lang === 'th' ? 'ขุดสระโคกหนองนา & วางระบบน้ำหยด 3D' : 'Build 3D Pond & Drip Grid'}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Side-by-Side 2D Inspector (If toggled) */}
+        {show2DInspector && uploaded2DImage && (
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-bold text-slate-800">
+                  {lang === 'th' ? 'ภาพ 2D ต้นฉบับที่นำมาแปลง:' : 'Original 2D Land Photo:'}
+                </span>
+                <span className="text-[11px] text-slate-500 font-mono">({uploadedImageName})</span>
+              </div>
+              <div className="border border-slate-200 rounded-xl overflow-hidden max-h-56 bg-slate-900 flex items-center justify-center">
+                <img
+                  src={uploaded2DImage}
+                  alt="2D Land Preview"
+                  className="max-h-56 object-contain"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-600 leading-relaxed">
+              <strong className="text-emerald-900 font-bold block text-sm">
+                {lang === 'th' ? 'ระบบแปลงและฉายภาพลงบนโมเดล 3D สำเร็จ' : '2D Projected onto 3D Surface'}
+              </strong>
+              <p>
+                {lang === 'th'
+                  ? 'ระบบได้นำภาพถ่ายแปลงที่ดิน 2D ของท่านมาฉายลงบนพื้นผิวภูมิประเทศ 3 มิติ และคำนวณตำแหน่งร่องสวน สระน้ำ และแนวปลูกต้นไม้โดยอัตโนมัติ'
+                  : 'The 2D land image has been texture-mapped onto the 3D terrain grid with spatial planting lines calculated automatically.'}
+              </p>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 font-mono space-y-1">
+                <div>• {lang === 'th' ? 'ขนาดแปลงที่ตรวจพบ:' : 'Detected Area:'} {plotAreaRai} {lang === 'th' ? 'ไร่' : 'Rai'}</div>
+                <div>• {lang === 'th' ? 'พืชหลักที่วางแนวแปลง:' : 'Assigned Crop:'} {crop.nameThai}</div>
+                <div>• {lang === 'th' ? 'สถานะโมเดล:' : 'Model Status:'} {isConverting ? 'กำลังคำนวณ...' : 'พร้อมจำลองการเติบโต'}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        
       </div>
     </div>
   );

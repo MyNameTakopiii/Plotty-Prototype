@@ -245,7 +245,27 @@ export const SAMPLE_DISEASES: PlantDisease[] = [
     treatmentEnglish: 'Prune infected twigs and burn. Apply systemic fungicides such as Difenoconazole or Carbendazim during humid periods.',
     crop: 'มะม่วงน้ำดอกไม้',
     previewColor: '#EF4444',
-    mockDiagnosis: { confidence: 94 },
+    mockDiagnosis: {
+      diseaseNameThai: 'โรคแอนแทรคโนสมะม่วง (Anthracnose)',
+      diseaseNameEnglish: 'Anthracnose (Colletotrichum gloeosporioides)',
+      pathogenType: 'เชื้อรา (Fungi)',
+      confidence: 94,
+      severity: 'high',
+      symptoms: [
+        'พบบนใบอ่อน มีแผลจุดสีน้ำตาลเข้มขอบเหลืองกระจายทั่วใบ',
+        'ผลอ่อนและผลแก่มีแผลจุดสีดำเน่าบุ๋มฉ่ำน้ำ ลุกลามขยายเป็นวงกว้าง',
+        'ช่อดอกดำและเหี่ยวแห้ง ร่วงหล่นก่อนติดผลในฤดูฝน'
+      ],
+      organicTreatment: [
+        'ใช้เชื้อราไตรโคเดอร์มา (Trichoderma harzianum) อัตรา 50 กรัม/น้ำ 20 ลิตร พ่นทางใบทุก 7-10 วัน',
+        'ตัดแต่งทรงพุ่มให้อากาศถ่ายเทสะดวก ลดความชื้นสะสมในทรงพุ่ม',
+        'เก็บซากใบและผลที่ร่วงลงพื้นไปเผาทำลายทิ้งนอกสวนทันที'
+      ],
+      chemicalTreatment: [
+        { activeIngredient: 'ไดฟีโนโคนาโซล (Difenoconazole 25% EC)', dosage: '10-15 ซีซี / น้ำ 20 ลิตร', phiDays: '7 วัน' },
+        { activeIngredient: 'อะซอกซีสโตรบิน (Azoxystrobin 25% SC)', dosage: '10 ซีซี / น้ำ 20 ลิตร', phiDays: '14 วัน' }
+      ]
+    },
     symptomsSummary: 'จุดแผลสีน้ำตาลบนใบและผล',
   },
   {
@@ -260,7 +280,26 @@ export const SAMPLE_DISEASES: PlantDisease[] = [
     treatmentEnglish: 'Spray wettable sulfur or Penconazole during flowering and initial fruit setting stages.',
     crop: 'มะม่วงมหาชนก',
     previewColor: '#F59E0B',
-    mockDiagnosis: { confidence: 89 },
+    mockDiagnosis: {
+      diseaseNameThai: 'โรคราแป้งมะม่วง (Powdery Mildew)',
+      diseaseNameEnglish: 'Powdery Mildew (Oidium mangiferae)',
+      pathogenType: 'เชื้อรา (Fungi)',
+      confidence: 89,
+      severity: 'moderate',
+      symptoms: [
+        'มีผงสีขาวคล้ายแป้งเกาะปกคลุมบริเวณช่อดอกและก้านดอก',
+        'ใบอ่อนบิดเบี้ยว หลุดร่วงก่อนกำหนด',
+        'ช่อดอกแห้งเกรียม เป็นสีน้ำตาลดำ และร่วงหล่นไม่ติดผล'
+      ],
+      organicTreatment: [
+        'พ่นน้ำส้มควันไม้ อัตรา 100 ซีซี / น้ำ 20 ลิตร ช่วงเช้าตรู่',
+        'ฉีดพ่นเชื้อแบคทีเรีย บาซิลลัส ซับทิลิส (BS) เพื่อยับยั้งสปอร์รา'
+      ],
+      chemicalTreatment: [
+        { activeIngredient: 'กำมะถันผงละลายน้ำ (Wettable Sulfur 80% WG)', dosage: '30-40 กรัม / น้ำ 20 ลิตร', phiDays: '3 วัน' },
+        { activeIngredient: 'เปนโคนาโซล (Penconazole 10% EC)', dosage: '10-15 ซีซี / น้ำ 20 ลิตร', phiDays: '10 วัน' }
+      ]
+    },
     symptomsSummary: 'ผงสีขาวบนช่อดอก',
   },
   {
@@ -275,7 +314,26 @@ export const SAMPLE_DISEASES: PlantDisease[] = [
     treatmentEnglish: 'Spray Imidacloprid or Fipronil at early infestation before full bloom.',
     crop: 'มะม่วงน้ำดอกไม้',
     previewColor: '#3B82F6',
-    mockDiagnosis: { confidence: 92 },
+    mockDiagnosis: {
+      diseaseNameThai: 'เพลี้ยจักจั่นช่อดอกมะม่วง (Mango Leaf Hopper)',
+      diseaseNameEnglish: 'Mango Leaf Hopper (Idioscopus clypealis)',
+      pathogenType: 'แมลงศัตรูพืช (Insect Pest)',
+      confidence: 92,
+      severity: 'high',
+      symptoms: [
+        'ตัวอ่อนและตัวเต็มวัยดูดกินน้ำเลี้ยงบริเวณช่อดอกและยอดอ่อน',
+        'ช่อดอกแห้งดำ ร่วงหล่น ไม่ติดผล',
+        'มีมูลหวานขับถ่ายออกมา ก่อให้เกิดเชื้อราดำเคลือบผิวใบและผล'
+      ],
+      organicTreatment: [
+        'พ่นด้วยน้ำมันสะเดา (Neem Oil Extract) อัตรา 50 ซีซี / น้ำ 20 ลิตร',
+        'ใช้กับดักกาวเหนียวสีเหลืองแขวนตามทรงพุ่มเพื่อดักจับตัวเต็มวัย'
+      ],
+      chemicalTreatment: [
+        { activeIngredient: 'อิมิดาโคลพริด (Imidacloprid 10% SL)', dosage: '10-15 ซีซี / น้ำ 20 ลิตร', phiDays: '14 วัน' },
+        { activeIngredient: 'ฟิโพรนิล (Fipronil 5% SC)', dosage: '15-20 ซีซี / น้ำ 20 ลิตร', phiDays: '14 วัน' }
+      ]
+    },
     symptomsSummary: 'เพลี้ยดูดกินน้ำเลี้ยงช่อดอก',
   },
 ];

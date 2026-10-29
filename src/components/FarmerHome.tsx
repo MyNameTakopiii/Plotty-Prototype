@@ -5,11 +5,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { ProvinceWeatherWidget } from './ProvinceWeatherWidget';
+import { AgriWeatherReport } from './AgriWeatherReport';
 import { EsgCarbonCalculator } from './EsgCarbonCalculator';
 import { PriceForecaster } from './PriceForecaster';
 import { UnifiedAgriAdvisor } from './UnifiedAgriAdvisor';
 import { CropYieldPlanner } from './CropYieldPlanner';
+import { FarmSimulator3D } from './FarmSimulator3D';
 import {
   Activity,
   Leaf,
@@ -33,18 +34,24 @@ import {
   ShieldCheck,
   FileText,
   Award,
-  Building2,
   X,
   MapPin,
-  Bot,
   Send,
-  MessageSquare,
-  Layers,
   Trees,
   Maximize2,
   Eye,
+  Sun,
+  CloudSun,
+  RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Mic,
+  PlusCircle,
+  ArrowUpRight,
+  Menu,
 } from 'lucide-react';
-import { LandBoundary2DPreview, PRESET_BANGKRUAI_25_RAI } from './InteractiveLandBoundaryPicker';
+import { MangoIcon } from './MangoIcon';
 
 export interface PlotSelectionData {
   plotId: string;
@@ -62,6 +69,7 @@ interface FarmerHomeProps {
   selectedProvince: string;
   setSelectedProvince?: (province: string) => void;
   onSelectPlotFor3D?: (plot: PlotSelectionData) => void;
+  onOpenSidebar?: () => void;
 }
 
 interface ChatMessage {
@@ -69,8 +77,9 @@ interface ChatMessage {
   sender: 'user' | 'ai';
   text: string;
   timestamp: string;
-  featureTool?: 'forecast' | 'advisor' | 'planner' | 'carbon' | '3d';
+  featureTool?: 'weather' | 'forecast' | 'advisor' | 'planner' | 'carbon' | '3d';
   plotAction?: PlotSelectionData;
+  showDashboardOverview?: boolean;
 }
 
 export const FarmerHome: React.FC<FarmerHomeProps> = ({
@@ -79,11 +88,15 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
   selectedProvince,
   setSelectedProvince,
   onSelectPlotFor3D,
+  onOpenSidebar,
 }) => {
-  const [activeFeatureTab, setActiveFeatureTab] = useState<'overview' | 'chat' | 'forecast' | 'advisor' | 'planner' | 'carbon'>('overview');
-  const [profitPriceMultiplier, setProfitPriceMultiplier] = useState<number>(1.0);
-  const [isOrganicSavingsApplied, setIsOrganicSavingsApplied] = useState<boolean>(true);
+  const [previewPlotFor3D, setPreviewPlotFor3D] = useState<PlotSelectionData | null>(null);
   const [showPassportModal, setShowPassportModal] = useState<boolean>(false);
+
+  // Map of message ID -> boolean (whether inline interactive tool is expanded)
+  const [expandedInlineTools, setExpandedInlineTools] = useState<Record<string, boolean>>({
+    'msg-welcome': true,
+  });
 
   // ESG Totals
   const [esgTotals, setEsgTotals] = useState<{ totalTons: number; totalIncomeThb: number }>({
@@ -91,27 +104,68 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
     totalIncomeThb: 121200,
   });
 
-  // AI Chat Messages State
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: 'msg-1',
-      sender: 'ai',
-      text: lang === 'th'
-        ? 'สวัสดีครับผม Plotty AI ผู้ช่วยจัดการสวนมะม่วงและประเมินสินเชื่อดิจิทัล\n\nยินดีรับฟังคำถามเรื่อง:\n• พยากรณ์ราคามะม่วงส่งออก 12 เดือน\n• หมอพืชมะม่วง & ตรวจสิทธิ์ที่ดิน ส.ป.ก. 4-01\n• คำนวณวงเงินสินเชื่อ ธ.ก.ส. จากหลักประกันต้นไม้\n• ดูโมเดล 3D แปลง A (1,750 ต้น), แปลง B (625 ต้น), หรือ แปลง C (220 ต้น)'
-        : 'Welcome! I am Plotty AI, your Smart Mango Orchard & Credit Assistant. How can I help your farm today?',
-      timestamp: 'เมื่อครู่',
-    },
-  ]);
-  const [inputQuery, setInputQuery] = useState<string>('');
-  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
-  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const handleEsgTotalsCalculated = React.useCallback((t: { totalTons: number; totalIncomeThb: number }) => {
+    setEsgTotals(t);
+  }, []);
 
-  // Scroll Chat to bottom
-  useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, isAiLoading]);
+  // Markdown Formatter Helper for Chat Messages
+  const renderFormattedMarkdown = (content: string, isUserMessage: boolean = false) => {
+    const lines = content.split('\n');
+    return lines.map((line, idx) => {
+      const parts = line.split(/(\*\*.*?\*\*)/g);
+      const formattedLine = parts.map((part, pIdx) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return (
+            <strong
+              key={pIdx}
+              className={isUserMessage ? 'font-black text-white' : 'font-extrabold text-slate-900'}
+            >
+              {part.slice(2, -2)}
+            </strong>
+          );
+        }
+        return part;
+      });
 
-  // Plots A, B, C Data with distinct tree counts and parameters
+      const trimmed = line.trim();
+      if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
+        const textAfterBullet = trimmed.slice(1).trim();
+        const bulletParts = textAfterBullet.split(/(\*\*.*?\*\*)/g);
+        const formattedBullet = bulletParts.map((part, pIdx) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return (
+              <strong
+                key={pIdx}
+                className={isUserMessage ? 'font-black text-white' : 'font-extrabold text-emerald-800'}
+              >
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          return part;
+        });
+
+        return (
+          <div key={idx} className="flex items-start gap-2 my-1 pl-1">
+            <span className={`font-black shrink-0 ${isUserMessage ? 'text-emerald-200' : 'text-emerald-600'}`}>•</span>
+            <div className="leading-snug">{formattedBullet}</div>
+          </div>
+        );
+      }
+
+      if (!line.trim()) {
+        return <div key={idx} className="h-2" />;
+      }
+
+      return (
+        <div key={idx} className="my-0.5 leading-relaxed">
+          {formattedLine}
+        </div>
+      );
+    });
+  };
+
+  // Plots A, B, C Data
   const plotsData: PlotSelectionData[] = [
     {
       plotId: 'plot_a',
@@ -142,6 +196,29 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
     },
   ];
 
+  // Initial Welcome Message
+  const initialWelcomeMessage: ChatMessage = {
+    id: 'msg-welcome',
+    sender: 'ai',
+    text: lang === 'th'
+      ? 'สวัสดีครับคุณสมพงษ์! ผมคือ **Plotty AI** ผู้ช่วยสวนเกษตรและสินเชื่อไม้ยืนต้นดิจิทัล\n\nระบบประมวลผลข้อมูลแปลงสวนมะม่วงบางคล้า 105 ไร่ (2,595 ต้น) เรียบร้อยแล้ว พร้อมสรุปสภาพอากาศ พยากรณ์ราคา และวงเงินกู้ ธ.ก.ส. ด้านล่างครับ:'
+      : 'Welcome to Plotty AI! Your 105-Rai mango orchard data (2,595 trees) has been synchronized below:',
+    timestamp: 'วันนี้ 08:00 น.',
+    showDashboardOverview: true,
+  };
+
+  // Chat Messages State
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([initialWelcomeMessage]);
+  const [inputQuery, setInputQuery] = useState<string>('');
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll Chat to bottom
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isAiLoading]);
+
+  // Navigate directly to dedicated 3D Tab
   const handleLaunch3DPlot = (plot: PlotSelectionData) => {
     if (onSelectPlotFor3D) {
       onSelectPlotFor3D(plot);
@@ -149,7 +226,70 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
     setCurrentTab('simulator');
   };
 
-  // AI Chat Assistant Query Handler using Gemini API or Fallback Reasoning Engine
+  // Toggle inline tool expansion for a specific message
+  const toggleInlineTool = (msgId: string) => {
+    setExpandedInlineTools((prev) => ({
+      ...prev,
+      [msgId]: prev[msgId] === false ? true : false,
+    }));
+  };
+
+  // Helper metadata for feature tools
+  const getToolMeta = (tool?: string) => {
+    switch (tool) {
+      case 'weather':
+        return { title: 'รายงานสภาพอากาศสวนเกษตรรายชั่วโมง & ดัชนีพ่นสาร', icon: CloudSun, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
+      case 'forecast':
+        return { title: 'พยากรณ์ราคามะม่วงส่งออก 12 เดือน (คำนวณตามรายแปลง)', icon: TrendingUp, color: 'text-blue-400 bg-blue-500/10 border-blue-500/30' };
+      case 'advisor':
+        return { title: 'หมอพืชมะม่วง & ตรวจสอบโฉนด ส.ป.ก. 4-01', icon: Stethoscope, color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
+      case 'planner':
+        return { title: 'คำนวณวงเงินกู้สินเชื่อ ธ.ก.ส. (2,595 ต้นหลักประกัน)', icon: Calculator, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
+      case 'carbon':
+        return { title: 'เครื่องคำนวณคาร์บอนเครดิต T-VER & โซลาร์', icon: Leaf, color: 'text-teal-400 bg-teal-500/10 border-teal-500/30' };
+      case '3d':
+        return { title: 'โมเดล 3D Digital Twin (ส่องแปลง)', icon: Box, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
+      default:
+        return null;
+    }
+  };
+
+  // Open Tool INLINE inside the Chat Stream
+  const handleOpenTool = (tool: 'weather' | 'forecast' | 'advisor' | 'planner' | 'carbon' | '3d', plot?: PlotSelectionData) => {
+    if (plot) setPreviewPlotFor3D(plot);
+    const msgId = `tool-msg-${Date.now()}`;
+    const toolInfo = getToolMeta(tool);
+
+    let introText = `เปิดใช้งาน **${toolInfo?.title}** แบบโต้ตอบสดในแชท:`;
+    if (tool === 'weather') introText = `รายงานสภาพอากาศรายชั่วโมง อ.บางคล้า จ.ฉะเชิงเทรา คำนวณช่วงเวลาพ่นสารและปริมาณน้ำรดแปลง 105 ไร่:`;
+    else if (tool === 'advisor') introText = `เปิดระบบหมอพืชมะม่วง อัปโหลดรูปภาพตรวจโรคใบ/ผล และตรวจสอบโฉนด ส.ป.ก. 4-01:`;
+    else if (tool === 'forecast') introText = `เปิดกราฟวิเคราะห์ราคามะม่วงส่งออก 12 เดือน คำนวณรายได้ประเมินจากแปลงของคุณสมพงษ์:`;
+    else if (tool === 'planner') introText = `เปิดเครื่องคำนวณวงเงินกู้สินเชื่อ ธ.ก.ส. อิงหลักประกันไม้ยืนต้น 2,595 ต้น (วงเงินสูงสุด ฿2,500,000):`;
+    else if (tool === 'carbon') introText = `เปิดเครื่องคำนวณคาร์บอนเครดิต T-VER ประเมินการกักเก็บ 303 tCO₂e/ปี และแผงโซลาร์ปั๊มน้ำ:`;
+    else if (tool === '3d') introText = `เปิดระบบส่องสวน 3D Digital Twin สำหรับ ${plot ? plot.name : 'แปลง A (1,750 ต้น)'}:`;
+
+    const newMsg: ChatMessage = {
+      id: msgId,
+      sender: 'ai',
+      text: introText,
+      timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+      featureTool: tool,
+      plotAction: plot,
+    };
+
+    setChatMessages((prev) => [...prev, newMsg]);
+    setExpandedInlineTools((prev) => ({ ...prev, [msgId]: true }));
+  };
+
+  // Reset chat conversation
+  const handleResetChat = () => {
+    if (window.confirm('คุณต้องการรีเซ็ตประวัติการสนทนาในหน้านี้ใช่หรือไม่?')) {
+      setChatMessages([initialWelcomeMessage]);
+      setExpandedInlineTools({ 'msg-welcome': true });
+    }
+  };
+
+  // AI Chat Query Handler using Gemini or Fallback Agro-Logic
   const handleSendMessage = async (customQuery?: string) => {
     const query = (customQuery || inputQuery).trim();
     if (!query || isAiLoading) return;
@@ -167,15 +307,17 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
 
     const lowerQ = query.toLowerCase();
 
-    // Determine Feature Action Chip or Tool Trigger
-    let targetTool: 'forecast' | 'advisor' | 'planner' | 'carbon' | '3d' | undefined;
+    // Determine Feature Tool Trigger
+    let targetTool: 'weather' | 'forecast' | 'advisor' | 'planner' | 'carbon' | '3d' | undefined;
     let targetPlot: PlotSelectionData | undefined;
 
-    if (lowerQ.includes('ราคา') || lowerQ.includes('แนวโน้ม') || lowerQ.includes('ส่งออก') || lowerQ.includes('forecast')) {
+    if (lowerQ.includes('สภาพอากาศ') || lowerQ.includes('อากาศ') || lowerQ.includes('ฝน') || lowerQ.includes('พ่น') || lowerQ.includes('weather')) {
+      targetTool = 'weather';
+    } else if (lowerQ.includes('ราคา') || lowerQ.includes('แนวโน้ม') || lowerQ.includes('ส่งออก') || lowerQ.includes('forecast')) {
       targetTool = 'forecast';
     } else if (lowerQ.includes('หมอพืช') || lowerQ.includes('โรค') || lowerQ.includes('ส.ป.ก') || lowerQ.includes('โฉนด') || lowerQ.includes('สิทธิ์')) {
       targetTool = 'advisor';
-    } else if (lowerQ.includes('สินเชื่อ') || lowerQ.includes('ธ.ก.ส') || lowerQ.includes('เงินกู้') || lowerQ.includes('ผลผลิต') || lowerQ.includes('loan')) {
+    } else if (lowerQ.includes('สินเชื่อ') || lowerQ.includes('ธ.ก.ส') || lowerQ.includes('เงินกู้') || lowerQ.includes('คะแนน') || lowerQ.includes('loan')) {
       targetTool = 'planner';
     } else if (lowerQ.includes('คาร์บอน') || lowerQ.includes('esg') || lowerQ.includes('โซลาร์') || lowerQ.includes('carbon')) {
       targetTool = 'carbon';
@@ -195,36 +337,43 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
       let replyText = '';
 
       if (apiKey) {
-        const ai = new GoogleGenAI({ apiKey });
-        const systemPrompt = `คุณคือ Plotty AI ผู้เชี่ยวชาญด้านสวนมะม่วง (น้ำดอกไม้สีทอง, มหาชนก, เขียวสามรส) สิทธิ์ที่ดิน ส.ป.ก. 4-01 การประเมินสินเชื่อไม้ยืนต้น ธ.ก.ส. และ 3D Digital Twin ตอบอย่างกระชับ นอบน้อม และเป็นกันเองในภาษาไทย ให้คำแนะนำที่มีประโยชน์เชิงวิชาการเกษตรและสินเชื่อ`;
-        
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: [
-            { role: 'user', parts: [{ text: `${systemPrompt}\n\nคำถามจากเกษตรกร: ${query}` }] },
-          ],
-        });
-        replyText = response.text || '';
-      }
+        try {
+          const ai = new GoogleGenAI({ apiKey });
+          const systemPrompt = `คุณคือ Plotty AI ผู้ช่วยเกษตรกรอัจฉริยะ (Smart Agro-Twin Assistant) ประจำสวนมะม่วงบางคล้า ฉะเชิงเทรา (105 ไร่, 2,595 ต้น) ครอบคลุมมะม่วงน้ำดอกไม้สีทอง มหาชนก และเขียวสามรส คำนวณราคาส่งออกและสินเชื่อ ธ.ก.ส. จากข้อมูลแปลงจริงของคุณสมพงษ์ ให้คำตอบกระชับ ตรงประเด็น สุภาพ`;
 
-      if (!replyText) {
-        if (targetTool === 'forecast') {
-          replyText = `**วิเคราะห์ราคามะม่วงส่งออก:**\nขณะนี้ราคามะม่วงน้ำดอกไม้สีทองเกรดพรีเมียมทรงตัวที่ ฿45/กก. (+4.5%) และคาดว่าจะแตะจุดสูงสุด ฿55-65/กก. ในช่วงเดือนเมษายน-พฤษภาคม (ฤดูกาลส่งออกตลาดญี่ปุ่นและเกาหลีใต้) กดปุ่มด้านล่างเพื่อเปิดกราฟพยากรณ์ 12 เดือนครับ`;
-        } else if (targetTool === 'advisor') {
-          replyText = `**ตรวจสุขภาพใบ & สิทธิ์ที่ดิน ส.ป.ก.:**\n• แปลง A และ B ผ่านเกณฑ์ปลอดโรคแอนแทรคโนส 94%\n• แปลง C ควรเฝ้าระวังความชื้นสัมพัทธ์สูง เสี่ยงโรคราแป้ง\n• โฉนด ส.ป.ก. 4-01 ของท่านได้รับการรับรองสิทธิ์เพื่อนำไม้ยืนต้นไปค้ำประกันสินเชื่อได้ถูกต้องตามกฎหมายแล้วครับ`;
-        } else if (targetTool === 'planner') {
-          replyText = `**ประเมินวงเงินสินเชื่อไม้ยืนต้น ธ.ก.ส.:**\n• แปลง A (1,750 ต้น): ประเมินมูลค่าไม้ยืนต้น ฿2,625,000\n• แปลง B (625 ต้น): ประเมินมูลค่า ฿937,500\n• แปลง C (220 ต้น): ประเมินมูลค่า ฿220,000\nรวมวงเงินสินเชื่อประเมินสูงสุด ฿2,500,000 ดอกเบี้ยพิเศษ MRR-2.25%`;
-        } else if (targetTool === 'carbon') {
-          replyText = `**ประเมินคาร์บอนเครดิต T-VER & โซลาร์:**\nสวนมะม่วง 70 ไร่ กักเก็บคาร์บอนได้ประมาณ 303 tCO₂e/ปี สร้างรายได้เสริมประมาณ 121,200 บาท/ปี พร้อมประหยัดค่าไฟปั๊มน้ำด้วยโซลาร์เซลล์ 35%`;
-        } else if (targetPlot) {
-          replyText = `**ระบบกำลังเตรียมแสดง 3D ${targetPlot.name}:**\nจำนวนต้นมะม่วงในโมเดล: **${targetPlot.treeCount.toLocaleString()} ต้น** (${targetPlot.areaRai} ไร่) กดปุ่มเปิด 3D เพื่อส่องกล้องเข้าชมแปลงได้ทันทีครับ`;
-        } else {
-          replyText = `**ยินดีให้บริการครับ!** Plotty AI พร้อมช่วยเหลือในการวิเคราะห์สวนมะม่วง 70 ไร่ ตรวจโรคพืช คำนวณราคาส่งออก และจำลองสวน 3D สำหรับแปลง A, B, และ C ครับ`;
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              { role: 'user', parts: [{ text: `${systemPrompt}\n\nคำถามจากเกษตรกร: ${query}` }] },
+            ],
+          });
+          replyText = response.text || '';
+        } catch (apiErr) {
+          console.warn('Gemini API call failed or rate limit exceeded, using built-in Agro-Engine fallback:', apiErr);
         }
       }
 
+      if (!replyText) {
+        if (targetTool === 'weather') {
+          replyText = `**รายงานสภาพอากาศสวนเกษตรรายชั่วโมงวันนี้:**\n• ฉะเชิงเทรา - อ.บางคล้า: **32°C แจ่มใส**\n• ความชื้นสัมพัทธ์: **72%** | ลม: **12 km/h**\n• ช่วงเวลาพ่นสารบำรุงที่แนะนำ: **16:00 - 18:00 น.** (หน้าต่างลมสงบ)\nเปิดใช้งานเครื่องมือสภาพอากาศแบบโต้ตอบสดด้านล่างได้เลยครับ:`;
+        } else if (targetTool === 'forecast') {
+          replyText = `**วิเคราะห์ราคามะม่วงส่งออกคำนวณจากแปลง 105 ไร่ของคุณ:**\n• มะม่วงน้ำดอกไม้สีทอง (70 ไร่ / 1,750 ต้น): **฿45/กก.** (คาดการณ์สูงสุดช่วงเม.ย. ฿65/กก.)\n• มะม่วงมหาชนก (25 ไร่ / 625 ต้น): **฿55/กก.**\n• ประมาณการรายได้รวมสูงสุดช่วง Peak: **฿4,375,000**\nเปิดใช้งานเครื่องมือคำนวณราคาและรายได้แบบโต้ตอบสดด้านล่างได้เลยครับ:`;
+        } else if (targetTool === 'advisor') {
+          replyText = `**ตรวจสุขภาพใบ & สิทธิ์ที่ดิน ส.ป.ก.:**\n• แปลง A และ B ผ่านเกณฑ์ปลอดโรคแอนแทรคโนส 94%\n• แปลง C ควรเฝ้าระวังความชื้นสัมพัทธ์สูง เสี่ยงโรคราแป้ง\n• โฉนด ส.ป.ก. 4-01 ของท่านได้รับการรับรองสิทธิ์เรียบร้อยแล้ว\nเปิดใช้งานระบบหมอพืชพร้อมอัปโหลดรูปภาพด้านล่างได้เลยครับ:`;
+        } else if (targetTool === 'planner') {
+          replyText = `**สรุปดัชนีสินเชื่อ & วงเงินกู้ ธ.ก.ส. คำนวณจากแปลงของคุณ:**\n• ไม้ยืนต้นหลักประกันรวม: **2,595 ต้น** (มูลค่าประเมิน ฿3,782,500)\n• ดัชนีสินเชื่อ: **GRADE A+ (94/100)**\n• วงเงินสินเชื่อประเมินสูงสุด (LTV 66%): **฿2,500,000**\nเปิดใช้งานเครื่องมือคำนวณสินเชื่อ ธ.ก.ส. ด้านล่างได้เลยครับ:`;
+        } else if (targetTool === 'carbon') {
+          replyText = `**ประเมินคาร์บอนเครดิต T-VER & โซลาร์เซลล์ คำนวณจากแปลง 70 ไร่:**\n• กักเก็บคาร์บอนได้ประมาณ: **303 tCO₂e/ปี** (สร้างรายได้เสริม ฿121,200/ปี)\nเปิดใช้งานเครื่องมือคำนวณคาร์บอนด้านล่างได้เลยครับ:`;
+        } else if (targetPlot) {
+          replyText = `**ระบบเตรียมแสดงโมเดล 3D ${targetPlot.name}:**\nจำนวนต้นมะม่วงในโมเดล: **${targetPlot.treeCount.toLocaleString()} ต้น** (${targetPlot.areaRai} ไร่) สุขภาพแปลง ${targetPlot.healthScore}%\nเปิดใช้งานโมเดล 3D ส่องสวนด้านล่างได้เลยครับ:`;
+        } else {
+          replyText = `**ยินดีให้บริการครับ!** Plotty AI พร้อมประมวลผลข้อมูลสวนมะม่วง 105 ไร่ เรื่องสภาพอากาศ ราคาส่งออก และวงเงินกู้ ธ.ก.ส. พิมพ์ถามหรือคลิกปุ่มตัวเลือกด่วนด้านล่างได้เลยครับ`;
+        }
+      }
+
+      const aiMsgId = `ai-${Date.now()}`;
       const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
+        id: aiMsgId,
         sender: 'ai',
         text: replyText,
         timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
@@ -233,6 +382,9 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
       };
 
       setChatMessages((prev) => [...prev, aiMsg]);
+      if (targetTool) {
+        setExpandedInlineTools((prev) => ({ ...prev, [aiMsgId]: true }));
+      }
     } catch (error) {
       console.error('AI Chat Error:', error);
       setChatMessages((prev) => [
@@ -240,7 +392,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
         {
           id: `ai-err-${Date.now()}`,
           sender: 'ai',
-          text: `ขอบคุณสำหรับคำถามครับ! ท่านสามารถใช้ปุ่มทางลัดด้านล่างเพื่อเข้าถึงฟีเจอร์ที่ต้องการได้ทันที`,
+          text: `ขอบคุณสำหรับคำถามครับ! ท่านสามารถใช้ปุ่มทางลัดคำสั่งด่วนด้านล่างเพื่อเปิดใช้งานเครื่องมือได้ทันที`,
           timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
           featureTool: targetTool,
         },
@@ -251,578 +403,459 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* 1. Main Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2.5">
-            <span>{lang === 'th' ? 'แดชบอร์ด & AI เกษตร' : 'Dashboard & AI Assistant'}</span>
-            <span className="text-xs bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-1 rounded-full border border-emerald-200">
-              Plotty Smart OS
-            </span>
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {lang === 'th'
-              ? 'รวมผู้ช่วย AI วิเคราะห์ราคาส่งออก ตรวจสิทธิ์ที่ดิน ส.ป.ก. สินเชื่อ ธ.ก.ส. และ 3D Digital Twin'
-              : 'Integrated AI Assistant, Price Forecasting, ALRO Title Audit & 3D Digital Twin'}
-          </p>
-        </div>
+    <div className="flex-1 flex flex-col h-full bg-white text-slate-900 overflow-hidden relative font-sans">
+      {/* 1. SCROLLABLE CHAT MESSAGES AREA */}
+      <div className="relative z-10 flex-1 overflow-y-auto p-3 sm:p-5 bg-white scroll-smooth">
+        <div className="max-w-3xl mx-auto space-y-4">
+            {chatMessages.map((msg) => {
+              const toolMeta = getToolMeta(msg.featureTool);
+              const isToolOpen = expandedInlineTools[msg.id] !== false;
 
-        <div className="flex items-center gap-2 text-xs bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 shadow-2xs self-start sm:self-auto flex-wrap">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="font-medium text-slate-800">
-            {lang === 'th' ? 'พิกัดสวน: อ.บางคล้า จ.ฉะเชิงเทรา (นำร่อง 70 ไร่)' : 'Location: Bang Khla, Chachoengsao'}
-          </span>
-        </div>
-      </div>
-
-      {/* 2. Weather Widget */}
-      <ProvinceWeatherWidget
-        lang={lang}
-        selectedProvince={selectedProvince}
-        onSelectProvince={setSelectedProvince}
-      />
-
-      {/* 3. 3D Digital Twin Plot Launcher Cards (Plots A, B, C - White Theme) */}
-      <div className="bg-white text-slate-900 rounded-3xl p-5 sm:p-6 shadow-md border border-slate-200/90 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
-                {lang === 'th' ? 'เลือกแปลงเพื่อเข้าชม 3D Digital Twin' : 'Select Plot for 3D Digital Twin'}
-              </span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              {lang === 'th' ? 'แปลงสวนมะม่วง 3 แปลง (ปรับปริมาณต้นใน 3D ตามแปลง)' : '3 Orchard Plots (Dynamic 3D Tree Counts)'}
-            </h2>
-          </div>
-          <button
-            onClick={() => setCurrentTab('simulator')}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer self-start md:self-auto"
-          >
-            <Box className="w-4 h-4" />
-            <span>{lang === 'th' ? 'เปิดแบบจำลองสวน 3D รวม' : 'Open Full 3D Simulator'}</span>
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Plot A Card */}
-          <div className="bg-emerald-50/50 rounded-2xl p-4 border border-emerald-200/90 hover:border-emerald-400 transition-all flex flex-col justify-between group shadow-2xs">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold bg-emerald-600 text-white px-2.5 py-0.5 rounded-full">
-                  {lang === 'th' ? 'แปลง A (นำร่อง)' : 'Plot A (Pilot)'}
-                </span>
-                <span className="text-[11px] text-emerald-800 font-mono font-bold">เกรด A+ (94/100)</span>
-              </div>
-              <h3 className="text-base font-black text-slate-900 group-hover:text-emerald-700 transition-colors">
-                {lang === 'th' ? 'มะม่วงน้ำดอกไม้สีทอง' : 'Nam Dok Mai Sri Thong'}
-              </h3>
-              <div className="text-xs text-slate-600 space-y-1 font-mono">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">เนื้อที่:</span>
-                  <span className="font-bold text-slate-900">70 ไร่</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">จำนวนต้น 3D:</span>
-                  <span className="font-bold text-emerald-700">1,750 ต้น (ทรงพุ่มใหญ่)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">อายุต้นไม้:</span>
-                  <span className="text-slate-800">8 ปี (เต็มวัย)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">วงเงินประเมิน:</span>
-                  <span className="text-amber-800 font-bold">฿2,450,000</span>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => handleLaunch3DPlot(plotsData[0])}
-              className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-            >
-              <Eye className="w-4 h-4" />
-              <span>{lang === 'th' ? 'ดู 3D แปลง A (1,750 ต้น)' : 'View 3D Plot A'}</span>
-            </button>
-          </div>
-
-          {/* Plot B Card */}
-          <div className="bg-teal-50/50 rounded-2xl p-4 border border-teal-200/90 hover:border-teal-400 transition-all flex flex-col justify-between group shadow-2xs">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold bg-teal-600 text-white px-2.5 py-0.5 rounded-full">
-                  {lang === 'th' ? 'แปลง B' : 'Plot B'}
-                </span>
-                <span className="text-[11px] text-teal-800 font-mono font-bold">เกรด A (88/100)</span>
-              </div>
-              <h3 className="text-base font-black text-slate-900 group-hover:text-teal-700 transition-colors">
-                {lang === 'th' ? 'มะม่วงมหาชนกส่งออก' : 'Mahachanok Export'}
-              </h3>
-              <div className="text-xs text-slate-600 space-y-1 font-mono">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">เนื้อที่:</span>
-                  <span className="font-bold text-slate-900">25 ไร่</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">จำนวนต้น 3D:</span>
-                  <span className="font-bold text-teal-700">625 ต้น (ทรงพุ่มกลาง)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">อายุต้นไม้:</span>
-                  <span className="text-slate-800">5 ปี</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">วงเงินประเมิน:</span>
-                  <span className="text-amber-800 font-bold">฿875,000</span>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => handleLaunch3DPlot(plotsData[1])}
-              className="mt-4 w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-            >
-              <Eye className="w-4 h-4" />
-              <span>{lang === 'th' ? 'ดู 3D แปลง B (625 ต้น)' : 'View 3D Plot B'}</span>
-            </button>
-          </div>
-
-          {/* Plot C Card */}
-          <div className="bg-amber-50/50 rounded-2xl p-4 border border-amber-200/90 hover:border-amber-400 transition-all flex flex-col justify-between group shadow-2xs">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold bg-amber-500 text-slate-950 px-2.5 py-0.5 rounded-full">
-                  {lang === 'th' ? 'แปลง C (เฝ้าระวัง)' : 'Plot C (Watch)'}
-                </span>
-                <span className="text-[11px] text-amber-900 font-mono font-bold">เกรด B+ (78/100)</span>
-              </div>
-              <h3 className="text-base font-black text-slate-900 group-hover:text-amber-800 transition-colors">
-                {lang === 'th' ? 'มะม่วงเขียวสามรส' : 'Green Three-Flavor'}
-              </h3>
-              <div className="text-xs text-slate-600 space-y-1 font-mono">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">เนื้อที่:</span>
-                  <span className="font-bold text-slate-900">10 ไร่</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">จำนวนต้น 3D:</span>
-                  <span className="font-bold text-amber-800">220 ต้น (ต้นเล็กวัยรุ่น)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">อายุต้นไม้:</span>
-                  <span className="text-slate-800">2 ปี</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">วงเงินประเมิน:</span>
-                  <span className="text-amber-800 font-bold">฿308,000</span>
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={() => handleLaunch3DPlot(plotsData[2])}
-              className="mt-4 w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-            >
-              <Eye className="w-4 h-4" />
-              <span>{lang === 'th' ? 'ดู 3D แปลง C (220 ต้น)' : 'View 3D Plot C'}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Integrated Feature Tool Switcher Tabs */}
-      <div className="bg-white rounded-2xl p-2 border border-slate-200 shadow-sm flex flex-wrap gap-1">
-        <button
-          onClick={() => setActiveFeatureTab('overview')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer ${
-            activeFeatureTab === 'overview'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Bot className="w-4 h-4 text-emerald-400" />
-          <span>{lang === 'th' ? 'Plotty AI Chat & สรุปภาพรวม' : 'Plotty AI Chat & Hub'}</span>
-        </button>
-
-        <button
-          onClick={() => setActiveFeatureTab('forecast')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer ${
-            activeFeatureTab === 'forecast'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" />
-          <span>{lang === 'th' ? 'พยากรณ์ราคามะม่วง' : 'Price Forecast'}</span>
-        </button>
-
-        <button
-          onClick={() => setActiveFeatureTab('advisor')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer ${
-            activeFeatureTab === 'advisor'
-              ? 'bg-amber-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Stethoscope className="w-4 h-4" />
-          <span>{lang === 'th' ? 'หมอพืช & สิทธิ์ ส.ป.ก.' : 'Plant Doctor & Rights'}</span>
-        </button>
-
-        <button
-          onClick={() => setActiveFeatureTab('planner')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer ${
-            activeFeatureTab === 'planner'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Calculator className="w-4 h-4" />
-          <span>{lang === 'th' ? 'วางแผนสินเชื่อ ธ.ก.ส.' : 'Yield & BAAC Loan'}</span>
-        </button>
-
-        <button
-          onClick={() => setActiveFeatureTab('carbon')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer ${
-            activeFeatureTab === 'carbon'
-              ? 'bg-teal-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Leaf className="w-4 h-4" />
-          <span>{lang === 'th' ? 'คาร์บอนเครดิต ESG' : 'ESG Carbon'}</span>
-        </button>
-      </div>
-
-      {/* 5. Render Active Feature Tool or Overview Chat */}
-      {activeFeatureTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* AI Chat Box Section (2 columns) */}
-          <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-md p-5 flex flex-col h-[560px]">
-            {/* Chat Title Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-xs">
-                  <Bot className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-2">
-                    <span>Plotty AI Assistant</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  </h3>
-                  <span className="text-[11px] text-slate-500 block">
-                    {lang === 'th' ? 'สอบถามเรื่องราคาสินค้า สุขภาพพืช สินเชื่อ และโมเดล 3D' : 'Ask about prices, diseases, loans & 3D models'}
-                  </span>
-                </div>
-              </div>
-              <span className="text-[10px] bg-slate-100 text-slate-700 font-mono px-2 py-1 rounded-md">
-                Gemini 3.8 Engine
-              </span>
-            </div>
-
-            {/* Chat Messages Body */}
-            <div className="flex-1 overflow-y-auto py-4 space-y-3.5 pr-1">
-              {chatMessages.map((msg) => (
+              return (
                 <div
                   key={msg.id}
-                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in duration-200`}
                 >
-                  <div
-                    className={`max-w-[85%] rounded-2xl p-3.5 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap ${
-                      msg.sender === 'user'
-                        ? 'bg-emerald-600 text-white font-medium rounded-br-xs shadow-xs'
-                        : 'bg-slate-100 text-slate-800 rounded-bl-xs border border-slate-200/80'
-                    }`}
-                  >
-                    <div>{msg.text}</div>
-                    <div
-                      className={`text-[9px] mt-1.5 font-mono ${
-                        msg.sender === 'user' ? 'text-emerald-100 text-right' : 'text-slate-400'
-                      }`}
-                    >
-                      {msg.timestamp}
-                    </div>
-
-                    {/* Integrated Tool Trigger Action Buttons inside Chat */}
-                    {msg.featureTool && (
-                      <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex flex-wrap gap-1.5">
-                        {msg.featureTool === 'forecast' && (
-                          <button
-                            onClick={() => setActiveFeatureTab('forecast')}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            <TrendingUp className="w-3.5 h-3.5" />
-                            <span>{lang === 'th' ? 'เปิดกราฟพยากรณ์ราคา 12 เดือน' : 'Open Price Forecast'}</span>
-                          </button>
-                        )}
-                        {msg.featureTool === 'advisor' && (
-                          <button
-                            onClick={() => setActiveFeatureTab('advisor')}
-                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            <Stethoscope className="w-3.5 h-3.5" />
-                            <span>{lang === 'th' ? 'เปิดระบบหมอพืช & ตรวจสิทธิ์ที่ดิน' : 'Open Plant Doctor'}</span>
-                          </button>
-                        )}
-                        {msg.featureTool === 'planner' && (
-                          <button
-                            onClick={() => setActiveFeatureTab('planner')}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            <Calculator className="w-3.5 h-3.5" />
-                            <span>{lang === 'th' ? 'เปิดเครื่องคำนวณสินเชื่อ ธ.ก.ส.' : 'Open Loan Planner'}</span>
-                          </button>
-                        )}
-                        {msg.featureTool === 'carbon' && (
-                          <button
-                            onClick={() => setActiveFeatureTab('carbon')}
-                            className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            <Leaf className="w-3.5 h-3.5" />
-                            <span>{lang === 'th' ? 'เปิดคำนวณคาร์บอนเครดิต T-VER' : 'Open Carbon Calculator'}</span>
-                          </button>
-                        )}
-                        {msg.plotAction && (
-                          <button
-                            onClick={() => handleLaunch3DPlot(msg.plotAction!)}
-                            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            <Box className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>{lang === 'th' ? `ชม 3D ${msg.plotAction.name}` : 'View 3D Model'}</span>
-                          </button>
-                        )}
+                  <div className="flex items-start gap-3 max-w-[100%] sm:max-w-[95%] w-full">
+                    {msg.sender === 'ai' && (
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-50/90 border border-amber-200/80 p-1 flex items-center justify-center shrink-0 mt-0.5 shadow-sm hover:scale-105 transition-transform">
+                        <MangoIcon className="w-full h-full object-cover rounded-xl" />
                       </div>
                     )}
+
+                    <div
+                      className={`flex-1 rounded-3xl p-4 sm:p-5 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap shadow-xs ${
+                        msg.sender === 'user'
+                          ? 'bg-emerald-600 text-white font-medium rounded-tr-xs ml-auto max-w-[85%]'
+                          : 'bg-slate-50 text-slate-900 rounded-tl-xs border border-slate-200'
+                      }`}
+                    >
+                      <div>{renderFormattedMarkdown(msg.text, msg.sender === 'user')}</div>
+
+                      {/* 4-IN-1 UNIFIED DASHBOARD CARD INSIDE INITIAL CHAT MESSAGE */}
+                      {msg.showDashboardOverview && (
+                        <div className="mt-4 pt-4 border-t border-slate-200 space-y-3.5">
+                          {/* Module 1: Daily Farm Weather */}
+                          <div className="bg-amber-50/70 rounded-2xl p-4 border border-amber-200 shadow-2xs space-y-2.5">
+                            <div className="flex items-center justify-between text-xs font-bold text-slate-900">
+                              <span className="flex items-center gap-1.5">
+                                <Sun className="w-4 h-4 text-amber-600" />
+                                <span>1. สภาพอากาศสวนเกษตรประจำวัน (ฉะเชิงเทรา - อ.บางคล้า)</span>
+                              </span>
+                              <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
+                                32°C แจ่มใส
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono pt-0.5">
+                              <div className="bg-white p-2.5 rounded-xl text-center border border-amber-200/80 shadow-2xs">
+                                <span className="text-slate-500 text-[10px] block font-sans">อุณหภูมิ</span>
+                                <span className="font-black text-amber-700 text-sm">32°C</span>
+                              </div>
+                              <div className="bg-white p-2.5 rounded-xl text-center border border-amber-200/80 shadow-2xs">
+                                <span className="text-slate-500 text-[10px] block font-sans">ความชื้นสัมพัทธ์</span>
+                                <span className="font-black text-cyan-700 text-sm">72%</span>
+                              </div>
+                              <div className="bg-white p-2.5 rounded-xl text-center border border-amber-200/80 shadow-2xs">
+                                <span className="text-slate-500 text-[10px] block font-sans">ความเร็วลม</span>
+                                <span className="font-black text-slate-800 text-sm">12 km/h</span>
+                              </div>
+                              <div className="bg-white p-2.5 rounded-xl text-center border border-amber-200/80 shadow-2xs">
+                                <span className="text-slate-500 text-[10px] block font-sans">คำแนะนำแปลง</span>
+                                <span className="font-bold text-emerald-700 text-[11px] font-sans">เหมาะพ่นบำรุง</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleOpenTool('weather')}
+                              className="mt-1 w-full py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                            >
+                              <CloudSun className="w-3.5 h-3.5" />
+                              <span>ดูรายงานสภาพอากาศรายชั่วโมง & ดัชนีพ่นสารในแชท</span>
+                            </button>
+                          </div>
+
+                          {/* Module 2: 3 Mango Plots with Direct 3D Launch Links */}
+                          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-2.5">
+                            <div className="flex items-center justify-between text-xs font-bold text-slate-900">
+                              <span className="flex items-center gap-1.5">
+                                <Box className="w-4 h-4 text-emerald-600" />
+                                <span>2. แปลงสวนมะม่วง 3 แปลง (ส่อง 3D แยกแปลง)</span>
+                              </span>
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
+                                รวม 2,595 ต้น (105 ไร่)
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              {/* Plot A */}
+                              <div className="bg-white rounded-xl p-3 border border-emerald-200 shadow-2xs flex flex-col justify-between">
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full">แปลง A</span>
+                                    <span className="text-[10px] font-bold text-emerald-700">เกรด A+</span>
+                                  </div>
+                                  <span className="font-black text-slate-900 text-xs block truncate">น้ำดอกไม้สีทอง</span>
+                                  <div className="text-[11px] text-slate-600 font-mono">
+                                    <div>เนื้อที่: <strong>70 ไร่</strong></div>
+                                    <div>ต้นไม้ 3D: <strong className="text-emerald-700 font-bold">1,750 ต้น</strong></div>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleLaunch3DPlot(plotsData[0])}
+                                  className="mt-2.5 w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-all shadow-2xs"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>ส่อง 3D แปลง A</span>
+                                </button>
+                              </div>
+
+                              {/* Plot B */}
+                              <div className="bg-white rounded-xl p-3 border border-cyan-200 shadow-2xs flex flex-col justify-between">
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black bg-cyan-600 text-white px-2 py-0.5 rounded-full">แปลง B</span>
+                                    <span className="text-[10px] font-bold text-cyan-700">เกรด A</span>
+                                  </div>
+                                  <span className="font-black text-slate-900 text-xs block truncate">มหาชนกส่งออก</span>
+                                  <div className="text-[11px] text-slate-600 font-mono">
+                                    <div>เนื้อที่: <strong>25 ไร่</strong></div>
+                                    <div>ต้นไม้ 3D: <strong className="text-cyan-700 font-bold">625 ต้น</strong></div>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleLaunch3DPlot(plotsData[1])}
+                                  className="mt-2.5 w-full py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[11px] rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-all shadow-2xs"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>ส่อง 3D แปลง B</span>
+                                </button>
+                              </div>
+
+                              {/* Plot C */}
+                              <div className="bg-white rounded-xl p-3 border border-amber-200 shadow-2xs flex flex-col justify-between">
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">แปลง C</span>
+                                    <span className="text-[10px] font-bold text-amber-700">เฝ้าระวัง</span>
+                                  </div>
+                                  <span className="font-black text-slate-900 text-xs block truncate">เขียวสามรส</span>
+                                  <div className="text-[11px] text-slate-600 font-mono">
+                                    <div>เนื้อที่: <strong>10 ไร่</strong></div>
+                                    <div>ต้นไม้ 3D: <strong className="text-amber-700 font-bold">220 ต้น</strong></div>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleLaunch3DPlot(plotsData[2])}
+                                  className="mt-2.5 w-full py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-[11px] rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-all shadow-2xs"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>ส่อง 3D แปลง C</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Module 3 & 4: Credit Score & Today's Export Prices Side-by-Side */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {/* Credit Score */}
+                            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-1.5">
+                              <div className="flex items-center justify-between text-xs font-bold text-slate-900">
+                                <span className="flex items-center gap-1.5">
+                                  <Award className="w-4 h-4 text-amber-600" />
+                                  <span>3. คะแนนสินเชื่อไม้ยืนต้น</span>
+                                </span>
+                                <span className="text-[10px] bg-amber-200 text-amber-950 px-2 py-0.5 rounded font-black">
+                                  GRADE A+
+                                </span>
+                              </div>
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-2xl font-black text-slate-900 font-mono">94</span>
+                                <span className="text-xs text-slate-500">/ 100</span>
+                                <span className="text-xs text-amber-800 font-bold ml-auto font-mono">วงเงิน ฿2.5M</span>
+                              </div>
+                              <div className="flex gap-1.5 pt-1">
+                                <button
+                                  onClick={() => handleOpenTool('planner')}
+                                  className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 cursor-pointer transition-all shadow-2xs"
+                                >
+                                  <Calculator className="w-3 h-3" />
+                                  <span>คำนวณเงินกู้</span>
+                                </button>
+                                <button
+                                  onClick={() => setShowPassportModal(true)}
+                                  className="py-1.5 px-2.5 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1 cursor-pointer transition-all border border-slate-300"
+                                  title="ออกใบรับรองสินทรัพย์"
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-amber-600" />
+                                  <span>ใบรับรอง</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Export Prices Today */}
+                            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 shadow-2xs space-y-1.5">
+                              <div className="flex items-center justify-between text-xs font-bold text-slate-900">
+                                <span className="flex items-center gap-1.5">
+                                  <TrendingUp className="w-4 h-4 text-cyan-600" />
+                                  <span>4. ราคามะม่วงส่งออกวันนี้</span>
+                                </span>
+                                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                                  +4.5% ปรับขึ้น
+                                </span>
+                              </div>
+                              <div className="space-y-0.5 text-xs font-mono">
+                                <div className="flex justify-between items-center text-slate-700">
+                                  <span>น้ำดอกไม้สีทอง:</span>
+                                  <span className="font-extrabold text-emerald-700">฿45/กก.</span>
+                                </div>
+                                <div className="flex justify-between items-center text-slate-700">
+                                  <span>มหาชนกส่งออก:</span>
+                                  <span className="font-extrabold text-emerald-700">฿55/กก.</span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleOpenTool('forecast')}
+                                className="mt-1 w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-2xs"
+                              >
+                                <TrendingUp className="w-3.5 h-3.5" />
+                                <span>คำนวณรายได้ประเมินรายแปลง</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Timestamp */}
+                      <div
+                        className={`text-[9px] mt-2 font-mono ${
+                          msg.sender === 'user' ? 'text-emerald-100 text-right' : 'text-slate-400'
+                        }`}
+                      >
+                        {msg.timestamp}
+                      </div>
+
+                      {/* INLINE INTERACTIVE FEATURE TOOL WIDGET EMBEDDED DIRECTLY IN CHAT STREAM */}
+                      {msg.featureTool && (
+                        <div className="mt-4 border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-md text-slate-900">
+                          {/* Inline Tool Card Header */}
+                          <div className="px-4 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between gap-2 text-slate-900">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              {toolMeta && (
+                                <div className={`p-1.5 rounded-lg border ${toolMeta.color} shrink-0`}>
+                                  <toolMeta.icon className="w-4 h-4" />
+                                </div>
+                              )}
+                              <span className="font-extrabold text-xs text-slate-900 truncate">
+                                {toolMeta?.title}
+                              </span>
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-2 py-0.5 rounded-full shrink-0">
+                                โต้ตอบได้ในแชท
+                              </span>
+                            </div>
+
+                            <button
+                              onClick={() => toggleInlineTool(msg.id)}
+                              className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold shrink-0"
+                              title={isToolOpen ? 'ย่อหน้าต่าง' : 'ขยายหน้าต่าง'}
+                            >
+                              <span>{isToolOpen ? 'ย่อ' : 'ขยาย'}</span>
+                              {isToolOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+                          </div>
+
+                          {/* Inline Tool Content Body */}
+                          {isToolOpen && (
+                            <div className="p-3 sm:p-5 bg-white rounded-b-2xl">
+                              {msg.featureTool === 'weather' && (
+                                <AgriWeatherReport
+                                  lang={lang}
+                                  selectedProvince={selectedProvince}
+                                  onSelectProvince={setSelectedProvince}
+                                />
+                              )}
+                              {msg.featureTool === 'forecast' && <PriceForecaster lang={lang} />}
+                              {msg.featureTool === 'advisor' && <UnifiedAgriAdvisor lang={lang} />}
+                              {msg.featureTool === 'planner' && (
+                                <CropYieldPlanner lang={lang} selectedProvince={selectedProvince} />
+                              )}
+                              {msg.featureTool === 'carbon' && (
+                                <EsgCarbonCalculator
+                                  lang={lang}
+                                  totalFarmRai={70}
+                                  onTotalCalculated={handleEsgTotalsCalculated}
+                                />
+                              )}
+                              {msg.featureTool === '3d' && (
+                                <div className="space-y-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                    <span className="font-bold text-xs text-slate-800">
+                                      โมเดล 3D Digital Twin: {msg.plotAction?.name || plotsData[0].name}
+                                    </span>
+                                    <button
+                                      onClick={() => handleLaunch3DPlot(msg.plotAction || plotsData[0])}
+                                      className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-all"
+                                    >
+                                      <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+                                      <span>เปิดเต็มจอในแท็บ 3D</span>
+                                    </button>
+                                  </div>
+                                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
+                                    <FarmSimulator3D lang={lang} initialPlot={msg.plotAction || plotsData[0]} />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              ))}
+              );
+            })}
 
-              {isAiLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-slate-100 rounded-2xl p-3 text-xs text-slate-600 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-emerald-600 animate-spin" />
-                    <span>Plotty AI กำลังวิเคราะห์ข้อมูลสวน...</span>
-                  </div>
+            {isAiLoading && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2 bg-slate-100 text-slate-800 rounded-2xl p-3 text-xs border border-slate-200 shadow-xs">
+                  <Sparkles className="w-4 h-4 text-emerald-600 animate-spin" />
+                  <span className="font-medium">Plotty AI กำลังประมวลผลข้อมูลแปลง...</span>
                 </div>
-              )}
-              <div ref={chatBottomRef} />
-            </div>
+              </div>
+            )}
+            <div ref={chatBottomRef} />
+          </div>
+        </div>
 
-            {/* Feature Action Chips Bar */}
-            <div className="py-2 overflow-x-auto flex items-center gap-1.5 border-t border-slate-100 no-scrollbar">
-              <span className="text-[10px] text-slate-400 font-bold shrink-0">ทางลัด:</span>
-              <button
-                onClick={() => handleSendMessage('พยากรณ์ราคามะม่วงน้ำดอกไม้ 12 เดือน')}
-                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-full shrink-0 cursor-pointer transition-colors"
-              >
-                พยากรณ์ราคา
-              </button>
-              <button
-                onClick={() => handleSendMessage('ตรวจสุขภาพใบและสิทธิ์โฉนด ส.ป.ก. 4-01')}
-                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-full shrink-0 cursor-pointer transition-colors"
-              >
-                หมอพืช & ส.ป.ก.
-              </button>
-              <button
-                onClick={() => handleSendMessage('คำนวณวงเงินสินเชื่อ ธ.ก.ส. แปลง 70 ไร่')}
-                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-full shrink-0 cursor-pointer transition-colors"
-              >
-                คำนวณสินเชื่อ
-              </button>
-              <button
-                onClick={() => handleSendMessage('ดู 3D แปลง A 1,750 ต้น')}
-                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-full shrink-0 cursor-pointer transition-colors"
-              >
-                3D แปลง A
-              </button>
-            </div>
+      {/* 3. PINNED BOTTOM PROMPT INPUT CONTAINER */}
+      <div className="shrink-0 bg-white border-t border-slate-200 p-2 sm:p-3.5 pb-3 sm:pb-4 z-20 shadow-md">
+        <div className="max-w-3xl mx-auto space-y-2">
+          {/* QUICK ACTION PROMPT CHIPS (PLACEMENT ABOVE INPUT BOX LIKE GEMINI UI) */}
+          <div className="flex items-center justify-start sm:justify-center gap-1.5 overflow-x-auto scrollbar-none py-1 text-xs px-2 sm:px-1 max-w-full">
+            <button
+              onClick={() => handleOpenTool('weather')}
+              className="px-3 py-1.5 bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+            >
+              <CloudSun className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span>สภาพอากาศวันนี้</span>
+            </button>
 
-            {/* Chat Input Form */}
+            <button
+              onClick={() => handleOpenTool('advisor')}
+              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+            >
+              <Stethoscope className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>หมอพืช & ตรวจโฉนด</span>
+            </button>
+
+            <button
+              onClick={() => handleOpenTool('forecast')}
+              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span>พยากรณ์ราคาส่งออก</span>
+            </button>
+
+            <button
+              onClick={() => handleOpenTool('planner')}
+              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+            >
+              <Calculator className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>วงเงินกู้ ธ.ก.ส. (2.5M)</span>
+            </button>
+
+            <button
+              onClick={() => handleOpenTool('carbon')}
+              className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+            >
+              <Leaf className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+              <span>คาร์บอนเครดิต</span>
+            </button>
+
+            <button
+              onClick={() => handleOpenTool('3d', plotsData[0])}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+            >
+              <Box className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>ส่อง 3D แปลง A</span>
+            </button>
+          </div>
+
+          {/* CENTERED PROMPT CONTAINER */}
+          <div className="bg-slate-50 border border-slate-300 rounded-3xl p-2.5 sm:p-3 shadow-xs relative">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSendMessage();
               }}
-              className="flex items-center gap-2 pt-1"
+              className="space-y-2"
             >
-              <input
-                type="text"
-                value={inputQuery}
-                onChange={(e) => setInputQuery(e.target.value)}
-                placeholder={lang === 'th' ? 'พิมพ์คำถามเกี่ยวกับการเกษตร สินเชื่อ หรือแปลง 3D...' : 'Ask Plotty AI anything...'}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-              />
-              <button
-                type="submit"
-                disabled={!inputQuery.trim() || isAiLoading}
-                className="p-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl transition-all cursor-pointer shrink-0 shadow-xs"
-              >
-                <Send className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={inputQuery}
+                  onChange={(e) => setInputQuery(e.target.value)}
+                  placeholder={
+                    lang === 'th'
+                      ? 'พิมพ์สั่งงาน Plotty AI เช่น "คำนวณราคาส่งออก", "คำนวณเงินกู้", "หมอพืช"...'
+                      : 'Ask Plotty AI to manage your orchard or loans...'
+                  }
+                  className="w-full bg-transparent border-none text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none font-medium px-2 py-0.5"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-1.5 border-t border-slate-200">
+                <div className="flex items-center gap-1.5">
+                  {/* Round Hamburger Menu Button on Bottom Left (Mobile Only) */}
+                  <button
+                    type="button"
+                    onClick={onOpenSidebar}
+                    className="w-8 h-8 rounded-full bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95 shrink-0 md:hidden"
+                    title="เปิดเมนูหลัก"
+                    aria-label="Open menu"
+                  >
+                    <Menu className="w-4 h-4 text-white" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenTool('advisor')}
+                    className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
+                    title="อัปโหลดรูปภาพโรคพืช"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                  <span className="text-[11px] text-slate-500 font-mono hidden sm:inline">
+                    105 ไร่ · 2,595 ต้น
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenTool('planner')}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1 border border-slate-200 cursor-pointer shadow-2xs"
+                  >
+                    <span>ประมวลผล</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400" />
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={!inputQuery.trim() || isAiLoading}
+                    className="p-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 text-white rounded-xl transition-all cursor-pointer shadow-xs"
+                    title="ส่งข้อความ"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </form>
           </div>
-
-          {/* Quick Metrics Summary Sidebar Card */}
-          <div className="space-y-4">
-            {/* Agri-Credit Score Bar */}
-            <div className="bg-white rounded-3xl p-5 border border-amber-200/80 shadow-md space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-600">คะแนนสินเชื่อแปลงเกษตร</span>
-                <span className="text-xs bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded shadow-2xs">
-                  GRADE A+
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-slate-900 font-mono">94</span>
-                <span className="text-xs text-slate-500">/ 100</span>
-              </div>
-              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-gradient-to-r from-amber-400 to-emerald-600 h-full w-[94%]" />
-              </div>
-              <div className="pt-2 border-t border-slate-100 text-xs text-slate-600 space-y-1">
-                <div className="flex justify-between">
-                  <span>วงเงินประเมิน ธ.ก.ส.:</span>
-                  <span className="font-bold text-amber-900 font-mono">฿2,500,000</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>ไม้ยืนต้นหลักประกัน:</span>
-                  <span className="font-bold text-emerald-800 font-mono">2,595 ต้น</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>ระเบียบ ส.ป.ก.:</span>
-                  <span className="font-bold text-emerald-700">ผ่านเกณฑ์ปี 2566</span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowPassportModal(true)}
-                className="mt-2 w-full py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-              >
-                <Award className="w-4 h-4 text-amber-300" />
-                <span>ออกใบรับรองสินทรัพย์ & สรุปการขาย</span>
-              </button>
-            </div>
-
-            {/* Quick Export Price Ticker Card */}
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-md space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <TrendingUp className="w-4 h-4 text-blue-600" />
-                  <span>ราคามะม่วงส่งออกวันนี้</span>
-                </span>
-                <button
-                  onClick={() => setActiveFeatureTab('forecast')}
-                  className="text-[11px] text-blue-600 font-bold hover:underline cursor-pointer"
-                >
-                  ดูทั้งหมด →
-                </button>
-              </div>
-
-              <div className="space-y-2 text-xs font-mono">
-                <div className="p-2.5 bg-slate-50 rounded-xl flex items-center justify-between">
-                  <span className="font-sans font-semibold text-slate-800">น้ำดอกไม้สีทอง (เกรดส่งออก)</span>
-                  <span className="font-bold text-emerald-700">฿45/กก.</span>
-                </div>
-                <div className="p-2.5 bg-slate-50 rounded-xl flex items-center justify-between">
-                  <span className="font-sans font-semibold text-slate-800">มะม่วงมหาชนก (เกรด A)</span>
-                  <span className="font-bold text-emerald-700">฿55/กก.</span>
-                </div>
-                <div className="p-2.5 bg-slate-50 rounded-xl flex items-center justify-between">
-                  <span className="font-sans font-semibold text-slate-800">เขียวสามรส</span>
-                  <span className="font-bold text-slate-700">฿25/กก.</span>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
-      )}
-
-      {/* Render Sub-Feature Views inline inside Dashboard */}
-      {activeFeatureTab === 'forecast' && (
-        <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-md animate-fade-in">
-          <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
-            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-              <span>พยากรณ์ราคามะม่วงล่วงหน้า 12 เดือน</span>
-            </h2>
-            <button
-              onClick={() => setActiveFeatureTab('overview')}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
-              aria-label="Close feature window"
-            >
-              <X className="w-4 h-4" />
-              <span>ปิด</span>
-            </button>
-          </div>
-          <PriceForecaster lang={lang} />
-        </div>
-      )}
-
-      {activeFeatureTab === 'advisor' && (
-        <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-md animate-fade-in">
-          <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
-            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <Stethoscope className="w-5 h-5 text-amber-600" />
-              <span>หมอพืชมะม่วง & ตรวจสอบสิทธิ์ที่ดิน ส.ป.ก. 4-01</span>
-            </h2>
-            <button
-              onClick={() => setActiveFeatureTab('overview')}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
-              aria-label="Close feature window"
-            >
-              <X className="w-4 h-4" />
-              <span>ปิด</span>
-            </button>
-          </div>
-          <UnifiedAgriAdvisor lang={lang} />
-        </div>
-      )}
-
-      {activeFeatureTab === 'planner' && (
-        <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-md animate-fade-in">
-          <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
-            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-emerald-600" />
-              <span>วางแผนผลผลิต & เครื่องคำนวณสินเชื่อไม้ยืนต้น ธ.ก.ส.</span>
-            </h2>
-            <button
-              onClick={() => setActiveFeatureTab('overview')}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
-              aria-label="Close feature window"
-            >
-              <X className="w-4 h-4" />
-              <span>ปิด</span>
-            </button>
-          </div>
-          <CropYieldPlanner lang={lang} selectedProvince={selectedProvince} />
-        </div>
-      )}
-
-      {activeFeatureTab === 'carbon' && (
-        <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-md animate-fade-in">
-          <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
-            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <Leaf className="w-5 h-5 text-teal-600" />
-              <span>เครื่องคำนวณคาร์บอนเครดิต T-VER & พลังงานโซลาร์ปั๊ม</span>
-            </h2>
-            <button
-              onClick={() => setActiveFeatureTab('overview')}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
-              aria-label="Close feature window"
-            >
-              <X className="w-4 h-4" />
-              <span>ปิด</span>
-            </button>
-          </div>
-          <EsgCarbonCalculator
-            lang={lang}
-            totalFarmRai={70}
-            onTotalCalculated={(t: { totalTons: number; totalIncomeThb: number }) => setEsgTotals(t)}
-          />
-        </div>
-      )}
+      </div>
 
       {/* Official Living Asset & Sales Certificate Modal */}
       {showPassportModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto text-slate-900">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 border border-slate-200 shadow-2xl space-y-6 relative animate-in fade-in zoom-in-95 duration-200 my-8">
             {/* Close Button */}
             <button
@@ -855,7 +888,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
               <div>
                 <span className="text-slate-500 block">เจ้าของแปลง / ผู้ขอรับรอง:</span>
                 <span className="font-bold text-slate-900 text-sm">นายสมพงษ์ มะม่วงทอง</span>
-                <span className="text-slate-500 block mt-1">พิกัดแปลง: อ.บางคล้า จ.ฉะเชิงเทรา (70 ไร่)</span>
+                <span className="text-slate-500 block mt-1">พิกัดแปลง: อ.บางคล้า จ.ฉะเชิงเทรา (105 ไร่)</span>
               </div>
               <div>
                 <span className="text-slate-500 block">สถานะสิทธิ์ที่ดิน ส.ป.ก. 4-01:</span>
@@ -881,7 +914,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
               <div className="bg-slate-100 rounded-2xl p-3.5 border border-slate-200 text-center">
                 <span className="text-[11px] text-slate-700 font-bold block">จำนวนไม้ยืนต้นหลักประกัน</span>
                 <span className="text-2xl font-black text-slate-900 font-mono block my-1">2,595 ต้น</span>
-                <span className="text-[10px] text-slate-600 block">3 แปลงย่อย (70 ไร่)</span>
+                <span className="text-[10px] text-slate-600 block">3 แปลงย่อย (105 ไร่)</span>
               </div>
             </div>
 
