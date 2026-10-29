@@ -19,7 +19,7 @@ export function App() {
   };
 
   return (
-    <div className="h-screen w-full bg-white flex flex-col text-slate-900 font-sans antialiased overflow-hidden">
+    <div className="h-screen w-full bg-white flex flex-col md:flex-row text-slate-900 font-sans antialiased overflow-hidden">
       {/* Navigation Sidebar Drawer */}
       <Sidebar
         currentTab={currentTab}
