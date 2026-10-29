@@ -728,11 +728,11 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
       {/* 3. PINNED BOTTOM PROMPT INPUT CONTAINER */}
       <div className="shrink-0 bg-white border-t border-slate-200 p-2 sm:p-3.5 pb-3 sm:pb-4 z-20 shadow-md">
         <div className="max-w-3xl mx-auto space-y-2">
-          {/* QUICK ACTION PROMPT CHIPS (PLACEMENT ABOVE INPUT BOX LIKE GEMINI UI) */}
-          <div className="flex items-center justify-start sm:justify-center gap-1.5 overflow-x-auto scrollbar-none py-1 text-xs px-2 sm:px-1 max-w-full">
+          {/* QUICK ACTION PROMPT CHIPS (FLEX-WRAP MULTI-ROW) */}
+          <div className="flex flex-wrap items-center justify-center gap-1.5 py-1 text-xs px-1">
             <button
               onClick={() => handleOpenTool('weather')}
-              className="px-3 py-1.5 bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+              className="px-3 py-1.5 bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
             >
               <CloudSun className="w-3.5 h-3.5 text-amber-700 shrink-0" />
               <span>สภาพอากาศวันนี้</span>
@@ -740,7 +740,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
 
             <button
               onClick={() => handleOpenTool('advisor')}
-              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
             >
               <Stethoscope className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               <span>หมอพืช & ตรวจโฉนด</span>
@@ -748,7 +748,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
 
             <button
               onClick={() => handleOpenTool('forecast')}
-              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
             >
               <TrendingUp className="w-3.5 h-3.5 text-blue-600 shrink-0" />
               <span>พยากรณ์ราคาส่งออก</span>
@@ -756,7 +756,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
 
             <button
               onClick={() => handleOpenTool('planner')}
-              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
             >
               <Calculator className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span>วงเงินกู้ ธ.ก.ส. (2.5M)</span>
@@ -764,7 +764,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
 
             <button
               onClick={() => handleOpenTool('carbon')}
-              className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+              className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
             >
               <Leaf className="w-3.5 h-3.5 text-teal-600 shrink-0" />
               <span>คาร์บอนเครดิต</span>
@@ -772,7 +772,7 @@ export const FarmerHome: React.FC<FarmerHomeProps> = ({
 
             <button
               onClick={() => handleOpenTool('3d', plotsData[0])}
-              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0 hover:scale-105 active:scale-95"
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
             >
               <Box className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span>ส่อง 3D แปลง A</span>
