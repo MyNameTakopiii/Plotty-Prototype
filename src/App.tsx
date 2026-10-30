@@ -34,10 +34,10 @@ export function App() {
 
       {/* Main Content Area */}
       <main
-        className={`flex-1 min-w-0 h-full transition-all overflow-hidden flex flex-col ${
+        className={`flex-1 min-w-0 h-full transition-all flex flex-col ${
           currentTab === 'simulator'
-            ? 'p-2 sm:p-4 max-w-full overflow-x-hidden'
-            : 'w-full'
+            ? 'p-2 sm:p-4 max-w-full overflow-y-auto overflow-x-hidden'
+            : 'w-full overflow-hidden'
         }`}
       >
         {currentTab === 'home' && (
